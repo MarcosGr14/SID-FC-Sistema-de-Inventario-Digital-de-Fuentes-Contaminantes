@@ -80,7 +80,7 @@ Proyecto diseñado y desarrollado por el equipo SID-FC:
 - Marcos Gaitan
 - Diego Cedeño
 - Isabella Castro
-- Madelein Delgado
+- Madeline Delgado
 - Kevin Florez
 
 
