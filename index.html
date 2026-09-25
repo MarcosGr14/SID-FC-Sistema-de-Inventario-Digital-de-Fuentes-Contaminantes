@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SID-FC · Sistema de Inventario Digital de Fuentes Contaminantes</title>
+<meta name="description" content="Prototipo académico UTP — Inventario, georreferenciación e inspección de fuentes contaminantes en Panamá.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+<link rel="stylesheet" href="css/style.css?v=8">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar__brand">
+    <span class="brand-mark" aria-hidden="true">🌿</span>
+    <div class="brand-text">
+      <h1>SID-FC</h1>
+      <p>Sistema de Inventario Digital de Fuentes Contaminantes</p>
+    </div>
+    <span class="badge-pill">🎓 Ing. Ambiental &amp; Software</span>
+  </div>
+
+  <nav class="site-nav" aria-label="Navegación principal">
+    <button class="page-link is-active" data-page="home" type="button">Inicio</button>
+    <button class="page-link" data-page="inventario" type="button">Inventario</button>
+    <button class="page-link" data-page="nosotros" type="button">Acerca de nosotros</button>
+    <button class="page-link" data-page="contacto" type="button">Contacto</button>
+  </nav>
+
+  <div class="social-links" aria-label="Redes sociales">
+    <a class="social-link" href="https://www.whatsapp.com/" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" title="WhatsApp">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 3.5A11.8 11.8 0 0 0 12.1 0C5.6 0 .3 5.3.3 11.8c0 2.1.6 4.1 1.6 5.9L.2 24l6.5-1.7a11.9 11.9 0 0 0 5.4 1.3h.1c6.5 0 11.8-5.3 11.8-11.8 0-3.1-1.2-6.1-3.5-8.3Zm-8.4 18.1h-.1c-1.7 0-3.4-.5-4.8-1.3l-.4-.2-3.8 1 1-3.7-.3-.4a9.7 9.7 0 1 1 8.4 4.6Zm5.3-7.3c-.3-.2-1.7-.8-2-.9-.3-.1-.5-.2-.7.2-.2.3-.7.9-.9 1.1-.2.2-.3.2-.6.1-.3-.2-1.2-.4-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.4.1-.6l.5-.5.3-.5c.1-.2 0-.4 0-.5l-.9-2.1c-.2-.5-.5-.4-.7-.4h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.4 0 1.4 1 2.8 1.1 3 .1.2 2 3.1 4.8 4.4.7.3 1.2.5 1.6.6.7.2 1.3.2 1.8.1.6-.1 1.7-.7 1.9-1.3.2-.6.2-1.1.2-1.3 0-.1-.2-.2-.5-.4Z"/></svg>
+    </a>
+    <a class="social-link" href="https://www.instagram.com/" target="_blank" rel="noopener noreferrer" aria-label="Instagram" title="Instagram">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle class="social-dot" cx="17.5" cy="6.7" r="1"/></svg>
+    </a>
+    <a class="social-link" href="https://github.com/" target="_blank" rel="noopener noreferrer" aria-label="GitHub" title="GitHub">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path class="social-github" d="M12 .8a11.2 11.2 0 0 0-3.5 21.8c.6.1.8-.3.8-.6v-2.1c-3.1.7-3.8-1.3-3.8-1.3-.5-1.3-1.3-1.6-1.3-1.6-1-.7.1-.7.1-.7 1.1.1 1.7 1.1 1.7 1.1 1 .1.8 2.3 3.8 1.6.1-.7.4-1.2.7-1.5-2.5-.3-5.1-1.2-5.1-5.5 0-1.2.4-2.1 1.1-2.9-.1-.3-.5-1.4.1-2.9 0 0 .9-.3 3 1.1a10.4 10.4 0 0 1 5.5 0c2.1-1.4 3-1.1 3-1.1.6 1.5.2 2.6.1 2.9.7.8 1.1 1.7 1.1 2.9 0 4.3-2.6 5.2-5.1 5.5.4.3.8 1 .8 2v3c0 .3.2.7.8.6A11.2 11.2 0 0 0 12 .8Z"/></svg>
+    </a>
+  </div>
+
+  <div class="topbar__actions inventory-actions" hidden>
+    <span id="sessionTag" class="session-tag" hidden></span>
+    <button id="btnLogin" class="btn btn--ghost-invert" type="button">🔒 Iniciar sesión</button>
+    <button id="btnNuevaFuente" class="btn btn--outline-invert" type="button" disabled>+ Nueva Fuente</button>
+    <button id="btnRegistrarInspeccion" class="btn btn--accent" type="button" disabled>📋 Registrar Inspección</button>
+    <button id="btnReporte" class="btn btn--info" type="button">📄 Reporte</button>
+  </div>
+</header>
+
+<main id="main">
+  <section class="page-view home-page" id="page-home">
+    <section class="home-hero" aria-labelledby="homeTitle">
+      <img class="home-hero__image" src="https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&amp;fit=crop&amp;w=2400&amp;q=85" alt="Bosque tropical de Panamá" fetchpriority="high">
+      <div class="home-hero__shade"></div>
+      <div class="home-hero__content">
+        <p class="eyebrow">Panamá · Ingeniería ambiental</p>
+        <h2 id="homeTitle">Conocer las fuentes.<br><span>Cuidar nuestro entorno.</span></h2>
+        <p class="home-hero__lead">Un mapa para entender dónde nace el impacto ambiental y cómo podemos darle seguimiento.</p>
+        <p class="home-hero__definition"><strong>¿Qué es una fuente contaminante?</strong> Una actividad, instalación o proceso que puede liberar contaminantes al agua, al aire o al suelo y afectar la salud y los ecosistemas.</p>
+        <button class="btn btn--accent btn--large" type="button" data-go-page="inventario">Explorar el inventario <span aria-hidden="true">→</span></button>
+      </div>
+      <a class="scroll-cue" href="#actualidad" aria-label="Desliza para ver actualidad ambiental"><span>Desliza para explorar</span><b aria-hidden="true">⌄</b></a>
+      <span class="home-hero__credit">Bosque tropical · Unsplash</span>
+    </section>
+    <section class="news-section" id="actualidad" aria-labelledby="newsTitle">
+      <div class="news-heading">
+        <div><p class="eyebrow">Panamá · Actualidad</p><h2 id="newsTitle">Lo que ocurre en nuestro entorno</h2></div>
+        <p>Noticias y acciones ambientales que ayudan a comprender los retos del país.</p>
+      </div>
+      <div class="news-grid">
+        <article class="news-card">
+          <a class="news-card__image" href="https://miambiente.gob.pa/dan-seguimiento-a-contaminacion-en-costa-del-este-responsables-aplican-medidas-correctivas/" target="_blank" rel="noopener noreferrer" aria-label="Leer noticia de MiAmbiente sobre Costa del Este">
+            <img src="https://miambiente.gob.pa/wp-content/uploads/2026/04/WhatsApp-Image-2026-04-09-at-8.26.31-PM-1.jpeg" alt="Imagen publicada por MiAmbiente sobre la afectación en Costa del Este" loading="lazy"><span>Agua</span>
+          </a>
+          <div class="news-card__body"><p class="news-card__meta">MiAmbiente · 10 abr 2026</p><h3>Seguimiento a contaminación en Costa del Este</h3><p>Autoridades reportaron medidas correctivas y limpieza tras detectar afectaciones en una quebrada.</p><a class="news-card__link" href="https://miambiente.gob.pa/dan-seguimiento-a-contaminacion-en-costa-del-este-responsables-aplican-medidas-correctivas/" target="_blank" rel="noopener noreferrer">Leer noticia <span aria-hidden="true">↗</span></a></div>
+        </article>
+        <article class="news-card">
+          <a class="news-card__image" href="https://miambiente.gob.pa/miambiente-lidera-operativo-interinstitucional-contra-vertido-ilegal-de-residuos-en-rio-abajo/" target="_blank" rel="noopener noreferrer" aria-label="Leer noticia de MiAmbiente sobre Río Abajo">
+            <img src="https://miambiente.gob.pa/wp-content/uploads/2026/03/2bc9748d-7fa5-4043-b784-8279f40882c2.jpg" alt="Imagen publicada por MiAmbiente sobre el operativo en Río Abajo" loading="lazy"><span>Residuos</span>
+          </a>
+          <div class="news-card__body"><p class="news-card__meta">MiAmbiente · 17 mar 2026</p><h3>Operativo contra vertidos ilegales en Río Abajo</h3><p>Una acción interinstitucional atendió puntos de disposición irregular cerca del estuario y los manglares.</p><a class="news-card__link" href="https://miambiente.gob.pa/miambiente-lidera-operativo-interinstitucional-contra-vertido-ilegal-de-residuos-en-rio-abajo/" target="_blank" rel="noopener noreferrer">Leer noticia <span aria-hidden="true">↗</span></a></div>
+        </article>
+        <article class="news-card">
+          <a class="news-card__image" href="https://www.tvn-2.com/nacionales/dron-prueba-tincion-confirman-descarga-contaminante-rio-matasnillo_1_2246105.html" target="_blank" rel="noopener noreferrer" aria-label="Leer noticia de TVN sobre el río Matasnillo">
+            <img src="https://static.tvn-2.com/clip/0e0fe600-fc7b-450c-82a2-1453316d8b94_16-9-aspect-ratio_default_0.jpg" alt="Imagen del área de descarga en el río Matasnillo, publicada por TVN y MiAmbiente" loading="lazy"><span>Monitoreo</span>
+          </a>
+          <div class="news-card__body"><p class="news-card__meta">TVN Noticias · 15 jun 2026</p><h3>Inspección reporta descarga hacia el río Matasnillo</h3><p>Una prueba de tinción y un sobrevuelo con dron documentaron una posible descarga en Obarrio.</p><a class="news-card__link" href="https://www.tvn-2.com/nacionales/dron-prueba-tincion-confirman-descarga-contaminante-rio-matasnillo_1_2246105.html" target="_blank" rel="noopener noreferrer">Leer noticia <span aria-hidden="true">↗</span></a></div>
+        </article>
+      </div>
+    </section>
+  </section>
+
+  <section class="page-view layout" id="page-inventario" hidden>
+
+  
+  <section class="stats" aria-label="Resumen general">
+    <article class="stat-card">
+      <span class="stat-card__icon stat-card__icon--blue">📍</span>
+      <div>
+        <p class="stat-card__label">Fuentes Monitoreadas</p>
+        <p class="stat-card__value" id="statTotal">–</p>
+      </div>
+    </article>
+    <article class="stat-card">
+      <span class="stat-card__icon stat-card__icon--green">✅</span>
+      <div>
+        <p class="stat-card__label">En Regla (Cumplimiento)</p>
+        <p class="stat-card__value stat-card__value--green" id="statOk">–</p>
+      </div>
+    </article>
+    <article class="stat-card">
+      <span class="stat-card__icon stat-card__icon--red">⚠️</span>
+      <div>
+        <p class="stat-card__label">En Alerta Roja (&gt; LMP)</p>
+        <p class="stat-card__value stat-card__value--red" id="statAlert">–</p>
+      </div>
+    </article>
+    <article class="stat-card">
+      <span class="stat-card__icon stat-card__icon--yellow">🗓️</span>
+      <div>
+        <p class="stat-card__label">Inspecciones del Mes</p>
+        <p class="stat-card__value" id="statMes">–</p>
+      </div>
+    </article>
+  </section>
+
+  
+  <section class="workspace">
+
+    <div class="panel map-panel">
+      <div class="panel__head">
+        <h2>🗺️ Georreferenciación de Fuentes Contaminantes</h2>
+        <span class="chip">📍 Panamá y Provincia</span>
+      </div>
+      <div class="filter-tabs" role="tablist" aria-label="Filtrar fuentes">
+        <button class="filter-tab is-active" data-filter="todas" type="button">Todas <span id="countTodas">(0)</span></button>
+        <button class="filter-tab" data-filter="agua" type="button">💧 Agua</button>
+        <button class="filter-tab" data-filter="aire" type="button">🌬️ Aire</button>
+        <button class="filter-tab filter-tab--danger" data-filter="alerta" type="button">⚠️ Alertas Rojas</button>
+      </div>
+      <div id="map" class="map"></div>
+    </div>
+
+    <div class="panel form-panel">
+      <nav class="tabs" role="tablist" aria-label="Secciones de trabajo">
+        <button class="tab is-active" data-tab="inspeccion" type="button">✏️ Inspección de Campo</button>
+        <button class="tab" data-tab="historico" type="button">📚 Histórico</button>
+        <button class="tab" data-tab="resumen" type="button">📊 Resumen &amp; Reglas</button>
+      </nav>
+
+      
+      <section class="tab-panel is-active" id="tab-inspeccion">
+        <h3>Registro Digital de Medición en Sitio</h3>
+        <form id="formInspeccion" class="grid-form" autocomplete="off">
+
+          <div class="field field--full source-select-field">
+            <label for="fFuente">Fuente o punto que se está evaluando</label>
+            <select id="fFuente" required>
+              <option value="" disabled selected>Seleccionar fuente…</option>
+            </select>
+            <p class="field-help" id="fFuenteHelp">Registra cada fuente o punto una sola vez. Después selecciónalo aquí para guardar cada medición en esa ubicación.</p>
+            <div class="source-select-field__actions">
+              <button class="link-btn" id="btnFuenteDesdeInspeccion" type="button">＋ Crear fuente o punto de evaluación</button>
+            </div>
+            <div class="source-location" id="fFuenteDetails" hidden>
+              <span id="fFuenteLugar"></span>
+              <button class="link-btn" id="btnVerFuenteMapa" type="button">Ver en mapa</button>
+            </div>
+          </div>
+
+          <label class="field">
+            <span>Inspector Ambiental</span>
+            <input id="fInspector" type="text" placeholder="Ej: Ing. Carlos Mendoza (ANAM/MiAmbiente)" required>
+          </label>
+
+          <label class="field">
+            <span>Matriz a Evaluar</span>
+            <select id="fMatriz" required>
+              <option value="agua">Agua Residual (Efluente)</option>
+              <option value="aire">Emisión Atmosférica</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Parámetro Normativo</span>
+            <select id="fParametro" required></select>
+          </label>
+
+          <label class="field">
+            <span>Valor Medido en Campo</span>
+            <div class="input-with-unit">
+              <input id="fValor" type="number" step="0.01" placeholder="Ej: 42.5" required>
+              <span id="fUnidad" class="unit">mg/L</span>
+            </div>
+          </label>
+
+          <label class="field">
+            <span>Fecha y Hora de Muestra</span>
+            <input id="fFecha" type="datetime-local" required>
+          </label>
+
+          <label class="field field--full">
+            <span>Observaciones / Equipos Utilizados</span>
+            <textarea id="fObservaciones" rows="3" placeholder="Ej: Medición realizada con multiparámetro HQ40d. Claridad visual media."></textarea>
+          </label>
+
+          <div class="field--full form-actions">
+            <span id="formLoginHint" class="hint">🔒 Inicia sesión como inspector para registrar mediciones.</span>
+            <button type="submit" class="btn btn--accent" id="btnGuardarInspeccion" disabled>Guardar Medición</button>
+          </div>
+        </form>
+      </section>
+
+      
+      <section class="tab-panel" id="tab-historico">
+        <div class="panel__head panel__head--tight">
+          <h3>Histórico de Inspecciones</h3>
+          <input id="buscarHistorico" type="search" placeholder="Buscar por fuente o inspector…">
+        </div>
+        <div class="table-scroll">
+          <table class="data-table" id="tablaHistorico">
+            <thead>
+              <tr>
+                <th>Fecha</th><th>Fuente</th><th>Matriz</th><th>Parámetro</th>
+                <th>Valor</th><th>Estado</th><th>Inspector</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <nav class="pagination" id="paginacionHistorico" aria-label="Páginas del histórico"></nav>
+      </section>
+
+      
+      <section class="tab-panel" id="tab-resumen">
+        <h3>Resumen por Fuente y Límites Normativos Vigentes</h3>
+        <div class="table-scroll">
+          <table class="data-table" id="tablaResumenFuentes">
+            <thead><tr><th>Fuente</th><th>Tipo</th><th>Sitio / coordenadas</th><th>Última medición</th><th>Estado</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <h4>Límites Máximos Permisibles (LMP) configurados</h4>
+        <div class="table-scroll">
+          <table class="data-table" id="tablaLimites">
+            <thead><tr><th>Matriz</th><th>Parámetro</th><th>Límite</th><th>Unidad</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+    </div>
+  </section>
+  </section>
+
+  <section class="page-view layout info-page" id="page-nosotros" hidden>
+    <header class="section-intro">
+      <p class="eyebrow">El equipo</p>
+      <h2>Acerca de nosotros</h2>
+      <p>Somos un equipo de cinco estudiantes trabajando en una herramienta para organizar y visualizar información ambiental de Panamá.</p>
+    </header>
+    <div class="team-grid">
+      <article class="team-card"><span class="team-card__number">01</span><h3>Marcos Gaitan</h3><p>Equipo SID-FC</p><small>marcos.gaitan@sidfc.test</small></article>
+      <article class="team-card"><span class="team-card__number">02</span><h3>Diego Cedeño</h3><p>Equipo SID-FC</p><small>diego.cedeno@sidfc.test</small></article>
+      <article class="team-card"><span class="team-card__number">03</span><h3>Isabella Castro</h3><p>Equipo SID-FC</p><small>isabella.castro@sidfc.test</small></article>
+      <article class="team-card"><span class="team-card__number">04</span><h3>Kevin Florez</h3><p>Equipo SID-FC</p><small>kevin.florez@sidfc.test</small></article>
+      <article class="team-card"><span class="team-card__number">05</span><h3>Madeleyn Delgado</h3><p>Equipo SID-FC</p><small>madeleyn.delgado@sidfc.test</small></article>
+    </div>
+    <p class="team-note">Alias de acceso sugeridos; cada usuario debe crearse en Supabase Auth con su propia contraseña. · Universidad Tecnológica de Panamá · Ingeniería de Software</p>
+  </section>
+
+  <section class="page-view layout info-page" id="page-contacto" hidden>
+    <header class="section-intro">
+      <p class="eyebrow">Hablemos</p>
+      <h2>Contacto</h2>
+      <p>¿Tienes una pregunta o una sugerencia sobre SID-FC? El proyecto forma parte de un trabajo académico de la Universidad Tecnológica de Panamá.</p>
+    </header>
+    <article class="contact-card">
+      <span class="contact-card__icon" aria-hidden="true">✉️</span>
+      <div>
+        <h3>Contacto del equipo</h3>
+        <p>Universidad Tecnológica de Panamá<br>Facultad de Ingeniería de Sistemas Computacionales<br>Proyecto SID-FC · Panamá</p>
+        <p class="contact-pending">Correo del equipo: pendiente de configurar</p>
+      </div>
+    </article>
+  </section>
+</main>
+
+<div class="modal-backdrop" id="modalLogin" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalLoginTitle">
+    <h3 id="modalLoginTitle">Iniciar sesión</h3>
+    <p class="modal__sub">Acceso para inspectores y administradores del sistema.</p>
+    <form id="formLogin">
+      <label class="field">
+        <span>Correo</span>
+        <input id="loginEmail" type="email" required placeholder="inspector@ambiente.gob.pa">
+      </label>
+      <label class="field">
+        <span>Contraseña</span>
+        <input id="loginPassword" type="password" required placeholder="••••••••">
+      </label>
+      <p class="modal__error" id="loginError" hidden></p>
+      <div class="modal__actions">
+        <button type="button" class="btn btn--ghost" id="btnCancelLogin">Cancelar</button>
+        <button type="submit" class="btn btn--accent">Entrar</button>
+      </div>
+    </form>
+    <p class="modal__demo-note" id="demoNote"></p>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modalFuente" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalFuenteTitle">
+    <h3 id="modalFuenteTitle">Registrar Nueva Fuente</h3>
+    <p class="modal__sub">Registra una fuente permanente o un punto puntual de evaluación. Escribe sus coordenadas, usa tu ubicación actual o selecciona el punto en el mapa.</p>
+    <form id="formFuente">
+      <label class="field">
+        <span>Nombre de la fuente o punto de evaluación</span>
+        <input id="nfNombre" type="text" required placeholder="Ej.: Planta de tratamiento o punto de muestreo">
+      </label>
+      <label class="field">
+        <span>Categoría</span>
+        <select id="nfCategoria" required>
+          <option value="agua">Descarga de Agua Residual</option>
+          <option value="aire">Emisión Atmosférica</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Referencia del sitio</span>
+        <input id="nfUbicacion" type="text" placeholder="Ej.: Juan Díaz, junto al río; planta de tratamiento…">
+      </label>
+      <div class="field-row">
+        <label class="field">
+          <span>Latitud</span>
+          <input id="nfLat" type="number" step="0.000001" required>
+        </label>
+        <label class="field">
+          <span>Longitud</span>
+          <input id="nfLng" type="number" step="0.000001" required>
+        </label>
+      </div>
+      <div class="location-tools">
+        <button type="button" class="btn btn--ghost" id="btnUsarUbicacion">◎ Usar ubicación actual</button>
+        <button type="button" class="btn btn--ghost" id="btnElegirMapa">⌖ Elegir punto en el mapa</button>
+        <span class="field-help" id="nfUbicacionEstado" aria-live="polite">También puedes hacer clic directamente en el mapa para fijar las coordenadas.</span>
+      </div>
+      <p class="modal__error" id="fuenteError" hidden></p>
+      <div class="modal__actions">
+        <button type="button" class="btn btn--ghost" id="btnCancelFuente">Cancelar</button>
+        <button type="submit" class="btn btn--accent">Guardar Fuente</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <div class="site-footer__grid">
+    <div>
+      <h4>🌿 SID-FC</h4>
+      <p>Prototipo académico para la centralización del inventario, georreferenciación e inspección de fuentes contaminantes en Panamá.</p>
+    </div>
+    <div>
+      <h4>Proyecto</h4>
+      <ul>
+        <li>Universidad Tecnológica de Panamá</li>
+        <li>Facultad de Ingeniería de Sistemas Computacionales</li>
+        <li>Ingeniería de Software · 1SF134</li>
+      </ul>
+    </div>
+    <div>
+      <h4>Datos y respaldo</h4>
+      <ul>
+        <li><button type="button" class="link-btn" id="footerExportJson">⬇ Exportar respaldo (JSON)</button></li>
+        <li><button type="button" class="link-btn" id="footerExportCsv">⬇ Exportar inspecciones (CSV)</button></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Aviso</h4>
+      <p class="disclaimer">SID-FC es una herramienta de apoyo informativo. Las alertas generadas no constituyen, por sí mismas, una determinación legal de incumplimiento ambiental.</p>
+    </div>
+  </div>
+  <div class="site-footer__bottom">
+    <span>© 2026 SID-FC — Proyecto académico UTP</span>
+    <span id="dbModeTag">Modo: —</span>
+  </div>
+</footer>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script src="js/config.js?v=8"></script>
+<script src="js/db.js?v=8"></script>
+<script src="js/map.js?v=8"></script>
+<script src="js/auth.js?v=7"></script>
+<script src="js/inspections.js?v=7"></script>
+<script src="js/export.js?v=7"></script>
+<script src="js/ui.js?v=11"></script>
+<script src="js/main.js?v=7"></script>
+</body>
+</html>
