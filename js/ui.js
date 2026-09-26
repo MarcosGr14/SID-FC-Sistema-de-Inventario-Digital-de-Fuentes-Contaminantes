@@ -248,9 +248,9 @@ const UI = (() => {
       tag.hidden = false;
       const correo = String(u.email || "").toLowerCase();
       const nombreVisible = u.user_metadata?.full_name || NOMBRES_CUENTAS_EQUIPO[correo] || u.email;
-      tag.textContent = `👤 ${nombreVisible}`;
+      tag.textContent = nombreVisible;
       tag.title = u.email || "";
-      btnLogin.textContent = "🔓 Cerrar sesión";
+      btnLogin.textContent = "Cerrar sesión";
       btnNuevaFuente.disabled = false;
       btnInsp.disabled = false;
       btnGuardar.disabled = false;
@@ -261,7 +261,7 @@ const UI = (() => {
       }
     } else {
       tag.hidden = true;
-      btnLogin.textContent = "🔒 Iniciar sesión";
+      btnLogin.textContent = "Iniciar sesión";
       btnNuevaFuente.disabled = true;
       btnInsp.disabled = true;
       btnGuardar.disabled = true;
