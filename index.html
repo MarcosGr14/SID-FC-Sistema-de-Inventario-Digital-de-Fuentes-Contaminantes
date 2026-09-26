@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SID-FC · Sistema de Inventario Digital de Fuentes Contaminantes</title>
 <meta name="description" content="Prototipo académico UTP — Inventario, georreferenciación e inspección de fuentes contaminantes en Panamá.">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,13 +14,13 @@
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 
-<link rel="stylesheet" href="css/style.css?v=9">
+<link rel="stylesheet" href="css/style.css?v=10">
 </head>
 <body>
 
 <header class="topbar">
   <div class="topbar__brand">
-    <span class="brand-mark" aria-hidden="true">🌿</span>
+    <button class="brand-mark" type="button" data-go-page="home" aria-label="SID-FC, volver al inicio"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M37.4 9.2C25 9.8 15.2 13.2 11 20.7c-2.4 4.3-1.5 9.2 1.8 11.5 3.2 2.2 7.5 1.3 10.2-2.5 3.7-5.3 5.8-12.1 14.4-20.5Z"/><path d="M10 39c4.6-9.5 11.6-15.2 21.1-20.3M18.3 31.5l-.1-8.2m6.8 1.1 5.6-6.7"/></svg></button>
     <div class="brand-text">
       <h1>SID-FC</h1>
       <p>Sistema de Inventario Digital de Fuentes Contaminantes</p>
@@ -282,14 +284,29 @@
       <h2>Contacto</h2>
       <p>¿Tienes una pregunta o una sugerencia sobre SID-FC? El proyecto forma parte de un trabajo académico de la Universidad Tecnológica de Panamá.</p>
     </header>
+    <div class="contact-layout">
     <article class="contact-card">
       <span class="contact-card__icon" aria-hidden="true">✉️</span>
       <div>
         <h3>Contacto del equipo</h3>
         <p>Universidad Tecnológica de Panamá<br>Facultad de Ingeniería de Sistemas Computacionales<br>Proyecto SID-FC · Panamá</p>
-        <p class="contact-pending">Correo del equipo: pendiente de configurar</p>
+        <p class="contact-pending">Envía tu consulta o reporte con el formulario. El equipo podrá revisarlo desde el panel de Netlify.</p>
       </div>
     </article>
+    <form class="contact-form" name="contacto" method="POST" data-netlify="true" netlify-honeypot="bot-field" id="contactForm">
+      <input type="hidden" name="form-name" value="contacto">
+      <p class="contact-honeypot" aria-hidden="true"><label>No completar: <input name="bot-field" tabindex="-1" autocomplete="off"></label></p>
+      <h3>Envíanos un mensaje</h3>
+      <div class="contact-form__grid">
+        <label class="field"><span>Nombre completo</span><input name="nombre" type="text" autocomplete="name" minlength="3" maxlength="100" pattern="[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ .'-]{2,99}" required placeholder="Tu nombre y apellido"></label>
+        <label class="field"><span>Correo electrónico</span><input name="email" type="email" autocomplete="email" maxlength="254" required placeholder="nombre@correo.com"></label>
+        <label class="field"><span>Celular</span><input name="celular" type="tel" autocomplete="tel" inputmode="tel" maxlength="24" pattern="[+0-9() .-]{8,24}" required placeholder="+507 6000 0000"><small>Incluye entre 8 y 15 dígitos.</small></label>
+        <label class="field"><span>Tipo de mensaje</span><select name="tipo" required><option value="" disabled selected>Selecciona una opción</option><option>Reporte ambiental</option><option>Comentario</option><option>Consulta</option><option>Otro</option></select></label>
+        <label class="field contact-form__message"><span>Comentario o detalle</span><textarea name="comentario" minlength="10" maxlength="1500" rows="5" required placeholder="Cuéntanos cómo podemos ayudarte (10 a 1500 caracteres)."></textarea></label>
+      </div>
+      <div class="contact-form__footer"><p id="contactFormStatus" class="contact-form__status" role="status" aria-live="polite"></p><button class="btn btn--accent" type="submit">Enviar mensaje <span aria-hidden="true">→</span></button></div>
+    </form>
+    </div>
   </section>
 </main>
 
@@ -403,7 +420,7 @@
 <script src="js/auth.js?v=7"></script>
 <script src="js/inspections.js?v=7"></script>
 <script src="js/export.js?v=7"></script>
-<script src="js/ui.js?v=11"></script>
+<script src="js/ui.js?v=12"></script>
 <script src="js/main.js?v=7"></script>
 </body>
 </html>

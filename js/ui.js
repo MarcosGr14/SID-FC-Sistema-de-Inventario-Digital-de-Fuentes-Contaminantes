@@ -588,6 +588,49 @@ const UI = (() => {
     update();
   }
 
+  function wireContactForm() {
+    const form = document.getElementById("contactForm");
+    if (!form) return;
+    const status = document.getElementById("contactFormStatus");
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const nombre = form.elements.namedItem("nombre");
+      const celular = form.elements.namedItem("celular");
+      const comentario = form.elements.namedItem("comentario");
+      nombre.value = nombre.value.trim().replace(/\s+/g, " ");
+      comentario.value = comentario.value.trim();
+      nombre.setCustomValidity(nombre.value.split(" ").length >= 2 ? "" : "Escribe tu nombre y al menos un apellido.");
+      const digitosCelular = celular.value.replace(/\D/g, "").length;
+      if (digitosCelular < 8 || digitosCelular > 15) {
+        celular.setCustomValidity("El celular debe tener entre 8 y 15 dígitos.");
+      } else {
+        celular.setCustomValidity("");
+      }
+      if (!form.reportValidity()) return;
+
+      const boton = form.querySelector('button[type="submit"]');
+      boton.disabled = true;
+      status.textContent = "Enviando tu mensaje…";
+      status.classList.remove("is-error");
+      try {
+        const data = new URLSearchParams(new FormData(form));
+        const response = await fetch("/", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: data.toString(),
+        });
+        if (!response.ok) throw new Error("No se pudo enviar el mensaje.");
+        form.reset();
+        status.textContent = "Gracias. Tu mensaje fue recibido y quedará disponible para el equipo.";
+      } catch {
+        status.textContent = "No pudimos enviar el mensaje. Inténtalo de nuevo más tarde.";
+        status.classList.add("is-error");
+      } finally {
+        boton.disabled = false;
+      }
+    });
+  }
+
   function wireReporte() {
     document.getElementById("btnReporte").addEventListener("click", () => {
       const conEstado = fuentesConEstado();
@@ -625,6 +668,7 @@ const UI = (() => {
 
     wireTabs(".tab", "tab-");
     wireNavigation();
+    wireContactForm();
     wireHomeParallax();
     wireFiltrosMapa();
     wireLoginModal();
