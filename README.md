@@ -81,7 +81,7 @@ Proyecto diseñado y desarrollado por el equipo SID-FC:
 - Diego Cedeño
 - Isabella Castro
 - Madeline Delgado
-- Kevin Florez
+- Kevin Flores
 
 
 Universidad Tecnológica de Panamá · Facultad de Ingeniería de Sistemas Computacionales.
