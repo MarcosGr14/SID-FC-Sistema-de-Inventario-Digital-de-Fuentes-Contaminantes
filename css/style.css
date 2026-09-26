@@ -600,6 +600,31 @@ h4{font-size:.9rem; margin:0 0 .6rem; color:var(--ink-600);}
 .scroll-cue{left:50%;right:auto;bottom:1.15rem;transform:translateX(-50%);}
 .news-heading h2,.section-intro h2,.team-card h3,.contact-form h3{font-family:var(--font-editorial);font-weight:400;letter-spacing:-.02em;}
 
+.topbar{color:#f4faf6;background:linear-gradient(110deg,#0b2f22 0%,#124b35 55%,#176044 100%);border-bottom-color:rgba(255,255,255,.12);box-shadow:0 8px 24px rgba(6,31,21,.2);}
+.brand-text h1{color:#fff;}
+.brand-text p{color:#c4dfcf;}
+.brand-mark{color:#bcebc9;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.12);}
+.brand-mark:hover{color:#fff;background:rgba(255,255,255,.2);}
+.page-link{color:#e0eee5;}
+.page-link:hover{color:#fff;background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.18);}
+.page-link.is-active{color:#fff;background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.2);}
+.site-nav .page-link[data-page="contacto"]{color:#0c3928;background:#bcebc9;border-color:#bcebc9;}
+.site-nav .page-link[data-page="contacto"]:hover{color:#082719;background:#d4f3dc;border-color:#d4f3dc;}
+.site-nav .page-link[data-page="contacto"].is-active{color:#fff;background:#218956;border-color:#218956;}
+.social-link{color:#e2f3e9;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);}
+.social-link:hover{color:#fff;background:rgba(255,255,255,.19);border-color:rgba(255,255,255,.35);}
+.topbar__actions{border-top-color:rgba(255,255,255,.18);}
+.topbar__actions .session-tag{color:#e5f3e9;background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.16);}
+.topbar__actions .session-tag:not([hidden])::before{background:#75d69a;box-shadow:0 0 0 3px rgba(117,214,154,.2);}
+.topbar__actions .btn{color:#e8f4ec;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.3);}
+.topbar__actions .btn:hover:not(:disabled){color:#fff;background:rgba(255,255,255,.17);border-color:rgba(255,255,255,.5);}
+.topbar__actions .btn--accent{color:#fff;background:#218956;border-color:#218956;}
+.topbar__actions .btn--accent:hover:not(:disabled){color:#fff;background:#2ba768;border-color:#2ba768;}
+.topbar__actions .btn--info{color:#123b2c;background:#d5ecdd;border-color:#d5ecdd;}
+.topbar__actions .btn--info:hover:not(:disabled){color:#0b2f22;background:#eff9f2;border-color:#eff9f2;}
+.topbar__actions .btn:disabled{color:#b9cbbf;background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12);}
+.topbar__actions .btn:focus-visible,.page-link:focus-visible,.social-link:focus-visible,.brand-mark:focus-visible{outline-color:#c3f3d0;}
+
 @media(max-width:1120px){
   .topbar{grid-template-columns:minmax(0,1fr) auto;gap:.55rem 1rem;}
   .topbar__brand{grid-column:1;grid-row:1;}
