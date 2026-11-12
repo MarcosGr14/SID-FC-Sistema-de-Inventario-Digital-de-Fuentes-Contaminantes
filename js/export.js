@@ -34,28 +34,36 @@ const SIDExport = (() => {
 
   async function exportCSV() {
     const [fuentes, inspecciones] = await Promise.all([DB.getFuentes(), DB.getInspecciones()]);
-    const fuentesById = Object.fromEntries(fuentes.map((f) => [f.id, f.nombre]));
+    const fuentesById = Object.fromEntries(fuentes.map((f) => [f.id, f]));
 
-    const header = ["Fecha", "Fuente", "Matriz", "Parametro", "Valor", "Unidad", "Cumple", "Inspector", "Observaciones"];
+    const header = ["Fecha", "Fuente", "Categoría de fuente", "Ubicación", "Latitud", "Longitud", "Medio", "Parámetro", "Valor", "Unidad", "Estado SID-FC", "Origen del dato", "Método", "Procedencia", "Inspector", "Observaciones"];
     const rows = inspecciones.map((i) => [
       i.fecha,
-      fuentesById[i.fuente_id] || i.fuente_id,
+      fuentesById[i.fuente_id]?.nombre || i.fuente_id,
+      fuentesById[i.fuente_id]?.categoria_fuente || "",
+      fuentesById[i.fuente_id]?.ubicacion || "",
+      fuentesById[i.fuente_id]?.lat ?? "",
+      fuentesById[i.fuente_id]?.lng ?? "",
       i.matriz,
       i.parametro,
       i.valor,
       i.unidad,
-      i.cumple ? "Sí" : "No",
+      i.estado || (i.cumple ? "bueno" : "alerta"),
+      i.origen_dato || "campo",
+      i.metodo_muestreo || "",
+      i.referencia_dato || "",
       i.inspector,
-      (i.observaciones || "").replace(/[\n,]/g, " "),
+      (i.observaciones || "").replace(/[\r\n]/g, " "),
     ]);
 
-    const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v ?? "").replace(/^[=+@-]/, "\'$&").replace(/"/g, '""')}"`).join(",")).join("\n");
     download(`sidfc-inspecciones-${timestamp()}.csv`, "\uFEFF" + csv, "text/csv;charset=utf-8;");
   }
 
   
   async function reportePDF(resumenHTML) {
     const win = window.open("", "_blank");
+    if (!win) throw new Error("Permite las ventanas emergentes para abrir el informe.");
     win.document.write(`
       <html lang="es"><head><meta charset="UTF-8"><title>Reporte SID-FC</title>
       <style>

@@ -27,7 +27,7 @@ En **Inventario** puedes ver las fuentes registradas y filtrar los marcadores po
 
 1. Inicia sesión con una cuenta de inspector.
 2. Pulsa **Nueva Fuente**.
-3. Ingresa el nombre, selecciona **Agua** o **Aire** y agrega una referencia del sitio.
+3. Ingresa el nombre, selecciona **Agua**, **Aire** o **Suelo** y agrega una referencia del sitio.
 4. Define la ubicación escribiendo latitud y longitud, usando la ubicación del dispositivo o pulsando **Elegir punto en el mapa** y marcando el sitio.
 5. Guarda el registro. La ubicación aparecerá en el mapa y podrá seleccionarse en futuras inspecciones.
 
@@ -35,16 +35,17 @@ Si vas a medir un punto nuevo en una visita, regístralo como punto de evaluaci�
 
 ### Registrar una inspección
 
-1. En **Inspección de Campo**, selecciona la fuente o el punto evaluado.
-2. La matriz de agua o aire se ajusta al tipo de fuente seleccionado.
+1. En **Mediciones**, selecciona la fuente o el punto evaluado.
+2. Selecciona el medio evaluado: una misma fuente admite mediciones de agua, aire o suelo.
 3. Elige el parámetro, ingresa el valor medido, la fecha y hora, y el nombre del inspector.
 4. Guarda la medición para consultar el resultado en el mapa, el resumen y el histórico.
 
 ### Consultar y exportar información
 
-- **Histórico:** busca inspecciones por fuente o inspector y avanza entre páginas.
-- **Resumen y reglas:** revisa el estado de cada fuente, sus coordenadas y los límites configurados.
-- **Reporte:** genera una vista imprimible que puede guardarse como PDF.
+- **Historial:** filtra por fuente, responsable, medio, estado y fechas. Pulsa una fuente para localizarla en el mapa y abrir su expediente.
+- **Criterios y fuentes:** consulta las últimas lecturas y referencias configuradas en listas paginadas.
+- **Informes:** imprime el estado actual o el historial filtrado completo.
+- **Expediente:** revisa mediciones comparables, observaciones y fotografías, cargadas desde archivo o URL HTTPS. Las evidencias requieren sesión.
 - **Datos y respaldo:** descarga un respaldo JSON o un archivo CSV de las inspecciones.
 
 ## 🔐 Acceso y datos
@@ -80,8 +81,8 @@ Proyecto diseñado y desarrollado por el equipo SID-FC:
 - Marcos Gaitan
 - Diego Cedeño
 - Isabella Castro
-- Madeline Delgado
-- Kevin Flores
+- Madeleyn Delgado
+- Kevin Florez
 
 
 Universidad Tecnológica de Panamá · Facultad de Ingeniería de Sistemas Computacionales.
@@ -89,3 +90,11 @@ Universidad Tecnológica de Panamá · Facultad de Ingeniería de Sistemas Compu
 ## ℹ️ Alcance
 
 SID-FC es un prototipo académico de seguimiento ambiental. Las alertas comparan las mediciones con los límites configurados en el sistema y no constituyen una determinación oficial de incumplimiento ambiental.
+
+## 🛠️ Estado del servicio y verificación
+
+Si aparece **Servicio de datos no disponible**, la navegación sigue operativa. Usa **Reintentar conexión** cuando vuelva el servicio. Registrar y exportar datos requiere la conexión con Supabase.
+
+Las dependencias Leaflet 1.9.4 y Supabase JS 2.119.0 están incluidas en `assets/vendor`, con sus licencias. El frontend no requiere compilación. Para ejecutar las pruebas de regresión de desarrollo: `npm ci` y `npm test`.
+
+El esquema base está en `sql/schema.sql`; la ampliación de expedientes, tendencias y evidencias está en `sql/actualizacion_expedientes_y_tendencias.sql`. El archivo `sql/datos_prueba.sql` contiene solo datos identificados como simulación, para uso académico.

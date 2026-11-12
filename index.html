@@ -2,7 +2,8 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#0f3d2c">
 <title>SID-FC · Sistema de Inventario Digital de Fuentes Contaminantes</title>
 <meta name="description" content="Prototipo académico UTP — Inventario, georreferenciación e inspección de fuentes contaminantes en Panamá.">
 <link rel="icon" type="image/x-icon" href="favicon.ico">
@@ -12,9 +13,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css"/>
 
-<link rel="stylesheet" href="css/style.css?v=11">
+<link rel="stylesheet" href="css/style.css?v=20261112">
 </head>
 <body>
 
@@ -55,10 +56,15 @@
   </div>
 </header>
 
-<main id="main">
+<a href="#main" class="skip-link">Saltar al contenido</a>
+<div id="connectionNotice" class="connection-notice" role="status" aria-live="polite">
+  <div><strong id="connectionTitle">Conectando con el inventario</strong><p id="connectionMessage">Puedes navegar mientras consultamos las estaciones y los registros de monitoreo.</p></div>
+  <button id="btnRetryConnection" class="btn btn--ghost" type="button" hidden>Reintentar conexión</button>
+</div>
+<main id="main" tabindex="-1">
   <section class="page-view home-page" id="page-home">
     <section class="home-hero" aria-labelledby="homeTitle">
-      <img class="home-hero__image" src="https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&amp;fit=crop&amp;w=2400&amp;q=85" alt="Bosque tropical de Panamá" fetchpriority="high">
+      <img class="home-hero__image" src="https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&amp;fit=crop&amp;w=2400&amp;q=85" alt="Bosque tropical" fetchpriority="high">
       <div class="home-hero__shade"></div>
       <div class="home-hero__content">
         <p class="eyebrow">Panamá · Ingeniería ambiental</p>
@@ -112,14 +118,14 @@
     <article class="stat-card">
       <span class="stat-card__icon stat-card__icon--green">✅</span>
       <div>
-        <p class="stat-card__label">En Regla (Cumplimiento)</p>
+        <p class="stat-card__label">Bajo criterio configurado</p>
         <p class="stat-card__value stat-card__value--green" id="statOk">–</p>
       </div>
     </article>
     <article class="stat-card">
       <span class="stat-card__icon stat-card__icon--red">⚠️</span>
       <div>
-        <p class="stat-card__label">En Alerta Roja (&gt; LMP)</p>
+        <p class="stat-card__label">Sobre el límite configurado</p>
         <p class="stat-card__value stat-card__value--red" id="statAlert">–</p>
       </div>
     </article>
@@ -137,13 +143,14 @@
 
     <div class="panel map-panel">
       <div class="panel__head">
-        <h2>🗺️ Georreferenciación de Fuentes Contaminantes</h2>
-        <span class="chip">📍 Panamá y Provincia</span>
+        <h2>Localización de fuentes y puntos de monitoreo</h2>
+        <span class="chip">Panamá · WGS 84</span>
       </div>
       <div class="filter-tabs" role="tablist" aria-label="Filtrar fuentes">
         <button class="filter-tab is-active" data-filter="todas" type="button">Todas <span id="countTodas">(0)</span></button>
         <button class="filter-tab" data-filter="agua" type="button">💧 Agua</button>
         <button class="filter-tab" data-filter="aire" type="button">🌬️ Aire</button>
+        <button class="filter-tab" data-filter="suelo" type="button">⛰️ Suelo</button>
         <button class="filter-tab filter-tab--danger" data-filter="alerta" type="button">⚠️ Alertas Rojas</button>
       </div>
       <div id="map" class="map"></div>
@@ -151,14 +158,14 @@
 
     <div class="panel form-panel">
       <nav class="tabs" role="tablist" aria-label="Secciones de trabajo">
-        <button class="tab is-active" data-tab="inspeccion" type="button">✏️ Inspección de Campo</button>
-        <button class="tab" data-tab="historico" type="button">📚 Histórico</button>
-        <button class="tab" data-tab="resumen" type="button">📊 Resumen &amp; Reglas</button>
+        <button class="tab is-active" data-tab="inspeccion" type="button">Mediciones</button>
+        <button class="tab" data-tab="historico" type="button">Historial</button>
+        <button class="tab" data-tab="resumen" type="button">Criterios y fuentes</button>
       </nav>
 
       
       <section class="tab-panel is-active" id="tab-inspeccion">
-        <h3>Registro Digital de Medición en Sitio</h3>
+        <h3>Registro de medición ambiental</h3>
         <form id="formInspeccion" class="grid-form" autocomplete="off">
 
           <div class="field field--full source-select-field">
@@ -177,38 +184,59 @@
           </div>
 
           <label class="field">
-            <span>Inspector Ambiental</span>
-            <input id="fInspector" type="text" placeholder="Ej: Ing. Carlos Mendoza (ANAM/MiAmbiente)" required>
+            <span>Responsable técnico</span>
+            <input id="fInspector" type="text" placeholder="Nombre y cargo del responsable" required>
           </label>
 
           <label class="field">
-            <span>Matriz a Evaluar</span>
+            <span>Medio evaluado</span>
             <select id="fMatriz" required>
-              <option value="agua">Agua Residual (Efluente)</option>
-              <option value="aire">Emisión Atmosférica</option>
+              <option value="agua">Agua</option>
+              <option value="aire">Aire</option>
+              <option value="suelo">Suelo</option>
             </select>
           </label>
 
           <label class="field">
-            <span>Parámetro Normativo</span>
+            <span>Parámetro medido</span>
             <select id="fParametro" required></select>
           </label>
 
           <label class="field">
-            <span>Valor Medido en Campo</span>
+            <span>Resultado analítico</span>
             <div class="input-with-unit">
-              <input id="fValor" type="number" step="0.01" placeholder="Ej: 42.5" required>
+              <input id="fValor" type="number" step="any" min="0" inputmode="decimal" placeholder="Ej: 42.5" required>
               <span id="fUnidad" class="unit">mg/L</span>
             </div>
           </label>
 
           <label class="field">
-            <span>Fecha y Hora de Muestra</span>
+            <span>Fecha y hora del muestreo</span>
             <input id="fFecha" type="datetime-local" required>
           </label>
 
+          <label class="field">
+            <span>Origen del dato</span>
+            <select id="fOrigenDato" required>
+              <option value="campo">Medición de campo</option>
+              <option value="laboratorio">Análisis de laboratorio</option>
+              <option value="oficial">Fuente oficial</option>
+              <option value="simulacion">Simulación / prueba</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Método o equipo</span>
+            <input id="fMetodo" type="text" maxlength="180" placeholder="Método, equipo o laboratorio">
+          </label>
+
           <label class="field field--full">
-            <span>Observaciones / Equipos Utilizados</span>
+            <span>Procedencia o enlace de referencia</span>
+            <input id="fReferenciaDato" type="text" maxlength="500" placeholder="Institución, identificador del conjunto de datos o URL">
+          </label>
+
+          <label class="field field--full">
+            <span>Observaciones del muestreo</span>
             <textarea id="fObservaciones" rows="3" placeholder="Ej: Medición realizada con multiparámetro HQ40d. Claridad visual media."></textarea>
           </label>
 
@@ -222,15 +250,24 @@
       
       <section class="tab-panel" id="tab-historico">
         <div class="panel__head panel__head--tight">
-          <h3>Histórico de Inspecciones</h3>
-          <input id="buscarHistorico" type="search" placeholder="Buscar por fuente o inspector…">
+          <div><h3>Histórico de Mediciones</h3><p class="section-note">Cada registro es una visita o lectura; no se reemplaza la medición anterior.</p></div>
+          <div class="history-report-actions"><button id="btnReporteHistorial" type="button" class="btn btn--accent">Imprimir historial filtrado</button></div>
+        </div>
+        <div class="history-filters">
+          <label class="field"><span>Buscar</span><input id="buscarHistorico" type="search" placeholder="Fuente, parámetro, inspector…"></label>
+          <label class="field"><span>Fuente</span><select id="filtroFuenteHistorico"><option value="">Todas</option></select></label>
+          <label class="field"><span>Medio</span><select id="filtroMatrizHistorico"><option value="">Todos</option><option value="agua">Agua</option><option value="aire">Aire</option><option value="suelo">Suelo</option></select></label>
+          <label class="field"><span>Estado</span><select id="filtroEstadoHistorico"><option value="">Todos</option><option value="bueno">Bajo criterio</option><option value="intermedio">Preventivo</option><option value="alerta">Alerta</option><option value="sin_referencia">Sin criterio</option></select></label>
+          <label class="field"><span>Desde</span><input id="filtroFechaDesde" type="date"></label>
+          <label class="field"><span>Hasta</span><input id="filtroFechaHasta" type="date"></label>
+          <button id="btnLimpiarFiltrosHistorico" class="btn btn--ghost" type="button">Limpiar</button>
         </div>
         <div class="table-scroll">
           <table class="data-table" id="tablaHistorico">
             <thead>
               <tr>
-                <th>Fecha</th><th>Fuente</th><th>Matriz</th><th>Parámetro</th>
-                <th>Valor</th><th>Estado</th><th>Inspector</th>
+                <th>Fecha</th><th>Fuente · mapa</th><th>Medio</th><th>Parámetro</th>
+                <th>Valor</th><th>Estado</th><th>Registrado por</th><th>Origen</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -241,19 +278,28 @@
 
       
       <section class="tab-panel" id="tab-resumen">
-        <h3>Resumen por Fuente y Límites Normativos Vigentes</h3>
+        <div class="panel__head panel__head--tight"><div><h3>Estado actual por fuente</h3><p class="section-note">Muestra la lectura más reciente; abre el expediente para consultar el historial completo.</p></div><button id="btnReporteResumen" type="button" class="btn btn--ghost">Imprimir estado actual</button></div>
         <div class="table-scroll">
           <table class="data-table" id="tablaResumenFuentes">
-            <thead><tr><th>Fuente</th><th>Tipo</th><th>Sitio / coordenadas</th><th>Última medición</th><th>Estado</th></tr></thead>
+            <thead><tr><th>Fuente</th><th>Medio / categoría</th><th>Sitio / coordenadas</th><th>Última medición</th><th>Estado</th><th>Expediente</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
-        <h4>Límites Máximos Permisibles (LMP) configurados</h4>
+        <nav class="pagination" id="paginacionFuentes" aria-label="Páginas de fuentes"></nav>
+        <h4>Referencias y parámetros configurados</h4>
+        <p class="section-note">Los criterios marcados como pendientes de verificación no deben interpretarse como límites oficiales.</p>
         <div class="table-scroll">
           <table class="data-table" id="tablaLimites">
-            <thead><tr><th>Matriz</th><th>Parámetro</th><th>Límite</th><th>Unidad</th></tr></thead>
+            <thead><tr><th>Medio</th><th>Parámetro</th><th>Límite configurado</th><th>Umbral preventivo SID-FC</th><th>Unidad</th><th>Referencia</th></tr></thead>
             <tbody></tbody>
           </table>
+        </div>
+        <nav class="pagination" id="paginacionLimites" aria-label="Páginas de parámetros y reglas"></nav>
+        <div class="official-data-links">
+          <strong>Fuentes oficiales de referencia</strong>
+          <a href="https://geoportal.miambiente.gob.pa/server/rest/services/Nodo_Agua_Saneamiento/MapServer" target="_blank" rel="noopener noreferrer">Cuencas y regiones hídricas · SINIA</a>
+          <a href="https://miambiente.gob.pa/miambiente-inaugura-primera-estacion-de-monitoreo-de-calidad-del-agua-del-rio-la-villa/" target="_blank" rel="noopener noreferrer">Estación de monitoreo del río La Villa · MiAmbiente</a>
+          <p>Estos enlaces aportan contexto y referencia; solo se etiquetan como mediciones oficiales cuando el registro conserva su procedencia verificable.</p>
         </div>
       </section>
 
@@ -297,9 +343,9 @@
       <p class="contact-honeypot" aria-hidden="true"><label>No completar: <input name="bot-field" tabindex="-1" autocomplete="off"></label></p>
       <h3>Envíanos un mensaje</h3>
       <div class="contact-form__grid">
-        <label class="field"><span>Nombre completo</span><input name="nombre" type="text" autocomplete="name" minlength="3" maxlength="100" pattern="[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ .'-]{2,99}" required placeholder="Tu nombre y apellido"></label>
+        <label class="field"><span>Nombre completo</span><input name="nombre" type="text" autocomplete="name" minlength="3" maxlength="100" required placeholder="Tu nombre y apellido"></label>
         <label class="field"><span>Correo electrónico</span><input name="email" type="email" autocomplete="email" maxlength="254" required placeholder="nombre@correo.com"></label>
-        <label class="field"><span>Celular</span><input name="celular" type="tel" autocomplete="tel" inputmode="tel" maxlength="24" pattern="[+0-9() .-]{8,24}" required placeholder="+507 6000 0000"><small>Incluye entre 8 y 15 dígitos.</small></label>
+        <label class="field"><span>Celular</span><input name="celular" type="tel" autocomplete="tel" inputmode="tel" maxlength="24" required placeholder="+507 6000 0000"><small>Incluye entre 8 y 15 dígitos.</small></label>
         <label class="field"><span>Tipo de mensaje</span><select name="tipo" required><option value="" disabled selected>Selecciona una opción</option><option>Reporte ambiental</option><option>Comentario</option><option>Consulta</option><option>Otro</option></select></label>
         <label class="field contact-form__message"><span>Comentario o detalle</span><textarea name="comentario" minlength="10" maxlength="1500" rows="5" required placeholder="Cuéntanos cómo podemos ayudarte (10 a 1500 caracteres)."></textarea></label>
       </div>
@@ -316,11 +362,11 @@
     <form id="formLogin">
       <label class="field">
         <span>Correo</span>
-        <input id="loginEmail" type="email" required placeholder="inspector@ambiente.gob.pa">
+        <input id="loginEmail" autocomplete="username" autocapitalize="none" type="email" required placeholder="inspector@ambiente.gob.pa">
       </label>
       <label class="field">
         <span>Contraseña</span>
-        <input id="loginPassword" type="password" required placeholder="••••••••">
+        <input id="loginPassword" autocomplete="current-password" type="password" required placeholder="••••••••">
       </label>
       <p class="modal__error" id="loginError" hidden></p>
       <div class="modal__actions">
@@ -342,10 +388,27 @@
         <input id="nfNombre" type="text" required placeholder="Ej.: Planta de tratamiento o punto de muestreo">
       </label>
       <label class="field">
-        <span>Categoría</span>
+        <span>Medio principal</span>
         <select id="nfCategoria" required>
           <option value="agua">Descarga de Agua Residual</option>
-          <option value="aire">Emisión Atmosférica</option>
+          <option value="aire">Aire</option>
+          <option value="suelo">Suelo</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Proceso o categoría de la fuente</span>
+        <select id="nfCategoriaFuente" required>
+          <option value="punto_muestreo">Punto de muestreo</option>
+          <option value="descarga_agua">Descarga de agua residual</option>
+          <option value="emision_fija">Emisión fija</option>
+          <option value="movilidad">Emisión por movilidad</option>
+          <option value="erosion_suelo">Erosión y sedimentación</option>
+          <option value="residuos_solidos">Residuos sólidos</option>
+          <option value="quema">Quema</option>
+          <option value="actividad_agricola">Actividad agrícola</option>
+          <option value="extraccion_materiales">Extracción de materiales</option>
+          <option value="construccion">Obra o construcción</option>
+          <option value="otro">Otro</option>
         </select>
       </label>
       <label class="field">
@@ -373,6 +436,37 @@
         <button type="submit" class="btn btn--accent">Guardar Fuente</button>
       </div>
     </form>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modalExpediente" hidden>
+  <div class="modal source-profile-modal" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+    <div class="profile-heading">
+      <div><p class="eyebrow">Expediente de fuente</p><h2 id="profileTitle">Fuente</h2><p id="profileLocation"></p></div>
+      <button id="btnCloseProfile" class="btn btn--ghost" type="button" aria-label="Cerrar expediente">Cerrar</button>
+    </div>
+    <div class="profile-metrics" id="profileMetrics"></div>
+    <section class="profile-section">
+      <div class="profile-section__heading"><div><h3>Evolución de las mediciones</h3><p id="profileTrend" class="section-note"></p></div><label class="field"><span>Parámetro</span><select id="profileParameter"></select></label></div>
+      <div class="profile-chart" id="profileChart" role="img" aria-label="Gráfico de mediciones de la fuente"></div>
+      <p id="profileChartNote" class="section-note"></p>
+    </section>
+    <section class="profile-section">
+      <h3>Mediciones y observaciones</h3>
+      <div class="table-scroll"><table class="data-table" id="profileHistory"><thead><tr><th>Fecha</th><th>Parámetro</th><th>Valor</th><th>Estado</th><th>Origen / procedencia</th><th>Observaciones</th></tr></thead><tbody></tbody></table></div>
+      <nav class="pagination" id="paginacionProfileHistory" aria-label="Páginas del expediente"></nav>
+    </section>
+    <section class="profile-section">
+      <div class="profile-section__heading"><div><h3>Evidencia fotográfica</h3><p id="profileEvidenceNotice" class="section-note"></p></div></div>
+      <form id="profileEvidenceForm" class="evidence-upload" hidden>
+        <label class="field"><span>Cargar fotografía (JPG, PNG o WebP, máximo 5 MB)</span><input id="profilePhoto" type="file" accept="image/jpeg,image/png,image/webp"></label>
+        <label class="field"><span>O pegar URL de fotografía</span><input id="profilePhotoUrl" type="url" inputmode="url" placeholder="https://sitio.com/imagen.jpg"><small class="field-help">Usa el enlace HTTPS directo al archivo de imagen.</small></label>
+        <label class="field"><span>Descripción</span><input id="profilePhotoDescription" type="text" maxlength="180" placeholder="Vista del punto, condición observada…"></label>
+        <label class="field"><span>Asociar a una medición</span><select id="profilePhotoInspection"><option value="">Evidencia general de la fuente</option></select></label>
+        <button class="btn btn--accent" type="submit">Subir evidencia</button>
+      </form>
+      <div class="evidence-gallery" id="profileEvidenceGallery"></div>
+    </section>
   </div>
 </div>
 
@@ -408,18 +502,18 @@
   </div>
 </footer>
 
-<div class="toast" id="toast" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/vendor/leaflet/leaflet.js"></script>
+<script src="assets/vendor/supabase-2.119.0.js"></script>
 
-<script src="js/config.js?v=8"></script>
-<script src="js/db.js?v=8"></script>
-<script src="js/map.js?v=8"></script>
-<script src="js/auth.js?v=7"></script>
-<script src="js/inspections.js?v=7"></script>
-<script src="js/export.js?v=7"></script>
-<script src="js/ui.js?v=13"></script>
-<script src="js/main.js?v=7"></script>
+<script src="js/config.js?v=20261112"></script>
+<script src="js/db.js?v=20261112"></script>
+<script src="js/map.js?v=20261112"></script>
+<script src="js/auth.js?v=20261112"></script>
+<script src="js/inspections.js?v=20261112"></script>
+<script src="js/export.js?v=20261112"></script>
+<script src="js/ui.js?v=20261112"></script>
+<script src="js/main.js?v=20261112"></script>
 </body>
 </html>

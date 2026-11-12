@@ -2,6 +2,7 @@
 const SIDMap = (() => {
   let map, markersLayer, tileLayer, previewMarker = null;
   let placementCallback = null;
+  const markersBySource = new Map();
 
   function init() {
     if (map) return;
@@ -24,7 +25,7 @@ const SIDMap = (() => {
   }
 
   function iconFor(estado) {
-    const color = estado === "alerta" ? "#d64541" : estado === "ok" ? "#1f9d5c" : "#7c8b83";
+    const color = estado === "alerta" ? "#d64541" : estado === "bueno" ? "#1f9d5c" : estado === "intermedio" ? "#d59a24" : "#7c8b83";
     return L.divIcon({
       className: "",
       html: `<div style="
@@ -39,8 +40,9 @@ const SIDMap = (() => {
   }
 
   
-  function render(fuentesConEstado, filtro = "todas") {
+  function render(fuentesConEstado, filtro = "todas", onViewSource = null) {
     markersLayer.clearLayers();
+    markersBySource.clear();
     previewMarker = null;
 
     const visibles = fuentesConEstado.filter((f) => {
@@ -54,16 +56,24 @@ const SIDMap = (() => {
       const lng = Number(f.lng);
       if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
       const marker = L.marker([f.lat, f.lng], { icon: iconFor(f.estado) });
-      const estadoTxt =
-        f.estado === "alerta" ? "⚠️ Alerta roja" : f.estado === "ok" ? "✅ En regla" : "— Sin mediciones";
+      const estadoTxt = ({ alerta: "⚠️ Alerta según criterio", intermedio: "◉ Rango preventivo", bueno: "✓ Bajo criterio configurado", sin_referencia: "— Sin criterio de referencia", sin_datos: "— Sin mediciones" })[f.estado] || "— Sin datos";
       const popup = document.createElement("div");
       const nombre = document.createElement("strong");
       nombre.textContent = f.nombre;
       const tipo = document.createElement("div");
-      tipo.textContent = `Tipo: ${f.tipo === "agua" ? "Descarga de agua" : "Emisión atmosférica"}`;
+      tipo.textContent = `Medio: ${{ agua: "Agua", aire: "Aire", suelo: "Suelo" }[f.tipo] || f.tipo} · Categoría: ${String(f.categoria_fuente || "otro").replaceAll("_", " ")}`;
       const estado = document.createElement("div");
       estado.textContent = estadoTxt;
       popup.append(nombre, tipo, estado);
+      if (f._fotoMapa) {
+        const imagen = document.createElement("img");
+        imagen.src = f._fotoMapa;
+        imagen.alt = `Fotografía de ${f.nombre}`;
+        imagen.className = "map-source-photo";
+        imagen.loading = "lazy";
+        imagen.addEventListener("error", () => imagen.remove(), { once: true });
+        popup.appendChild(imagen);
+      }
       if (f.ubicacion) {
         const referencia = document.createElement("div");
         referencia.textContent = `Sitio: ${f.ubicacion}`;
@@ -72,12 +82,26 @@ const SIDMap = (() => {
       const coordenadas = document.createElement("small");
       coordenadas.textContent = `Coordenadas: ${Number(f.lat).toFixed(5)}, ${Number(f.lng).toFixed(5)}`;
       popup.appendChild(coordenadas);
+      if (onViewSource) {
+        const button = document.createElement("button"); button.type = "button"; button.textContent = "Ver expediente"; button.className = "map-profile-link";
+        button.addEventListener("click", () => onViewSource(f.id)); popup.appendChild(button);
+      }
       if (f.ultimaMedicion) {
         const ultima = document.createElement("small");
         ultima.textContent = `Última medición: ${f.ultimaMedicion}`;
         popup.appendChild(ultima);
       }
       marker.bindPopup(popup);
+      const tooltip = document.createElement("div");
+      tooltip.className = "map-hover-card";
+      const tooltipText = document.createElement("span");
+      tooltipText.textContent = `${f.nombre} · ${estadoTxt}`;
+      tooltip.append(tooltipText);
+      if (f._fotoMapa) {
+        const thumb = document.createElement("img"); thumb.src = f._fotoMapa; thumb.alt = ""; thumb.className = "map-hover-photo"; thumb.loading = "lazy"; thumb.addEventListener("error", () => thumb.remove(), { once: true }); tooltip.prepend(thumb);
+      }
+      marker.bindTooltip(tooltip, { direction: "top", offset: [0, -18], opacity: 1, className: "map-hover-tooltip" });
+      markersBySource.set(String(f.id), marker);
       marker.addTo(markersLayer);
     });
 
@@ -110,10 +134,17 @@ const SIDMap = (() => {
     map.setView([lat, lng], Math.max(map.getZoom(), 15), { animate: true });
   }
 
+  function focusFuente(id) {
+    const marker = markersBySource.get(String(id));
+    if (!map || !marker) return;
+    map.setView(marker.getLatLng(), Math.max(map.getZoom(), 15), { animate: true });
+    marker.openPopup();
+  }
+
   function setMarkerPreview(latlng) {
     if (previewMarker) markersLayer.removeLayer(previewMarker);
     previewMarker = L.marker(latlng, { title: "Ubicación seleccionada" }).addTo(markersLayer);
   }
 
-  return { init, isInitialized: () => Boolean(map), render, enablePlacement, disablePlacement, setMarkerPreview, invalidateSize, focus };
+  return { init, isInitialized: () => Boolean(map), render, enablePlacement, disablePlacement, setMarkerPreview, invalidateSize, focus, focusFuente };
 })();

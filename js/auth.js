@@ -9,9 +9,7 @@ const Auth = (() => {
 
   async function restore() {
     if (isSupabase()) {
-      const { data } = await window.supabase
-        .createClient(SID_CONFIG.SUPABASE_URL, SID_CONFIG.SUPABASE_ANON_KEY)
-        .auth.getSession();
+      const { data } = await DB.client().auth.getSession();
       currentUser = data?.session?.user || null;
       return currentUser;
     }
@@ -22,9 +20,11 @@ const Auth = (() => {
 
   async function login(email, password) {
     if (isSupabase()) {
-      const client = window.supabase.createClient(SID_CONFIG.SUPABASE_URL, SID_CONFIG.SUPABASE_ANON_KEY);
+      const client = DB.client();
       const { data, error } = await client.auth.signInWithPassword({ email, password });
-      if (error) throw new Error("Credenciales inválidas o usuario no registrado en Supabase Auth.");
+      if (error) throw new Error(error.status === 400 || error.status === 401
+        ? "El correo o la contraseña no son correctos."
+        : "No se pudo conectar con el servicio de acceso. Revisa la conexión e inténtalo de nuevo.");
       currentUser = data.user;
       return currentUser;
     }
@@ -39,11 +39,11 @@ const Auth = (() => {
     );
   }
 
-  function logout() {
+  async function logout() {
     currentUser = null;
     sessionStorage.removeItem(SESSION_KEY);
     if (isSupabase()) {
-      window.supabase.createClient(SID_CONFIG.SUPABASE_URL, SID_CONFIG.SUPABASE_ANON_KEY).auth.signOut();
+      await DB.client().auth.signOut({ scope: "local" });
     }
   }
 

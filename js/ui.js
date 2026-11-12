@@ -1,13 +1,23 @@
 
 const UI = (() => {
+  let datosDisponibles = false;
+  let cargandoDatos = false;
   let fuentes = [];
   let inspecciones = [];
   let filtroActual = "todas";
   let paginaHistorico = 1;
+  let paginaFuentes = 1;
+  let paginaLimites = 1;
+  let paginaHistorialPerfil = 1;
+  let paginaHistorialFiltrada = [];
+  let fuentePerfilActiva = null;
   let abrirFuenteDespuesDelLogin = false;
   let regresarAInspeccionDespuesDeFuente = false;
   let abrirRegistroNuevaFuente = null;
-  const HISTORICO_POR_PAGINA = 8;
+  const HISTORICO_POR_PAGINA = 6;
+  const FUENTES_POR_PAGINA = 5;
+  const LIMITES_POR_PAGINA = 5;
+  const HISTORIAL_PERFIL_POR_PAGINA = 5;
   const NOMBRES_CUENTAS_EQUIPO = {
     "marcos.gaitan@sidfc.test": "Marcos Gaitan",
     "diego.cedeno@sidfc.test": "Diego Cedeño",
@@ -44,17 +54,16 @@ const UI = (() => {
     return fuentes.map((f) => {
       const propias = inspecciones
         .filter((i) => i.fuente_id === f.id)
-        .sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
+        .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
       const ultima = propias[0];
-      let estado = "sin_datos";
-      if (ultima) estado = ultima.cumple ? "ok" : "alerta";
+      const estado = ultima ? (ultima.estado || (ultima.cumple ? "bueno" : "alerta")) : "sin_datos";
       return { ...f, estado, ultimaMedicion: ultima ? fmtFecha(ultima.fecha) : null };
     });
   }
   function renderStats() {
     const conEstado = fuentesConEstado();
     const total = conEstado.length;
-    const ok = conEstado.filter((f) => f.estado === "ok").length;
+    const ok = conEstado.filter((f) => f.estado === "bueno" || f.estado === "intermedio").length;
     const alerta = conEstado.filter((f) => f.estado === "alerta").length;
 
     const now = new Date();
@@ -71,7 +80,7 @@ const UI = (() => {
   }
   function renderMap() {
     if (!SIDMap.isInitialized()) return;
-    SIDMap.render(fuentesConEstado(), filtroActual);
+    SIDMap.render(fuentesConEstado(), filtroActual, abrirExpediente);
   }
   function poblarFuentesSelect() {
     const sel = document.getElementById("fFuente");
@@ -80,7 +89,7 @@ const UI = (() => {
     fuentes.forEach((f) => {
       const opt = document.createElement("option");
       opt.value = f.id;
-      opt.textContent = `${f.nombre} · ${f.tipo === "agua" ? "Agua" : "Aire"}${f.ubicacion ? ` · ${f.ubicacion}` : ""}`;
+      opt.textContent = `${f.nombre} · ${titulo(f.tipo)}${f.ubicacion ? ` · ${f.ubicacion}` : ""}`;
       sel.appendChild(opt);
     });
     ayuda.textContent = fuentes.length
@@ -101,6 +110,16 @@ const UI = (() => {
     document.getElementById("fFuenteLugar").textContent = `${referencia ? `${referencia} · ` : "Ubicación"}${coordenadas}`;
   }
 
+  function titulo(value) {
+    return ({ agua: "Agua", aire: "Aire", suelo: "Suelo", sin_datos: "Sin datos", bueno: "Bajo criterio", intermedio: "Preventivo", alerta: "Alerta", sin_referencia: "Sin referencia", campo: "Campo", laboratorio: "Laboratorio", oficial: "Oficial", simulacion: "Simulación" })[value] || String(value || "—").replaceAll("_", " ");
+  }
+  function estadoDe(i) { return i.estado || (i.cumple ? "bueno" : "alerta"); }
+  function pillEstado(estado) {
+    const cls = estado === "alerta" ? "status-pill--alert" : estado === "bueno" ? "status-pill--ok" : estado === "intermedio" ? "status-pill--mid" : "status-pill--unknown";
+    const label = estado === "bueno" ? "Bajo criterio" : titulo(estado);
+    return `<span class="status-pill ${cls}">${escapeHTML(label)}</span>`;
+  }
+
   function poblarParametros() {
     const matriz = document.getElementById("fMatriz").value;
     const paramSel = document.getElementById("fParametro");
@@ -110,7 +129,7 @@ const UI = (() => {
     opciones.forEach((l) => {
       const opt = document.createElement("option");
       opt.value = l.parametro;
-      opt.textContent = `${l.parametro} (LMP ${l.limite} ${l.unidad})`;
+      opt.textContent = `${l.parametro}${l.limite == null ? " (sin referencia cargada)" : ` (criterio ${l.limite} ${l.unidad})`}`;
       paramSel.appendChild(opt);
     });
     unidadSpan.textContent = opciones[0]?.unidad || "";
@@ -123,9 +142,7 @@ const UI = (() => {
   function ajustarMatrizFuente() {
     const fuente = fuentes.find((f) => String(f.id) === document.getElementById("fFuente").value);
     const matrizSel = document.getElementById("fMatriz");
-    [...matrizSel.options].forEach((option) => {
-      option.disabled = Boolean(fuente && option.value !== fuente.tipo);
-    });
+    [...matrizSel.options].forEach((option) => { option.disabled = false; });
     if (fuente) matrizSel.value = fuente.tipo;
     poblarParametros();
     actualizarDetalleFuente();
@@ -134,16 +151,29 @@ const UI = (() => {
     const tbody = document.querySelector("#tablaHistorico tbody");
     const fuentesById = Object.fromEntries(fuentes.map((f) => [f.id, f.nombre]));
     const texto = filtroTexto.trim().toLowerCase();
+    const filtroFuente = document.getElementById("filtroFuenteHistorico")?.value || "";
+    const filtroMatriz = document.getElementById("filtroMatrizHistorico")?.value || "";
+    const filtroEstado = document.getElementById("filtroEstadoHistorico")?.value || "";
+    const desde = document.getElementById("filtroFechaDesde")?.value || "";
+    const hasta = document.getElementById("filtroFechaHasta")?.value || "";
 
     const filas = [...inspecciones]
       .sort((a, b) => (a.fecha < b.fecha ? 1 : -1))
       .filter((i) => {
+        if (filtroFuente && String(i.fuente_id) !== filtroFuente) return false;
+        if (filtroMatriz && i.matriz !== filtroMatriz) return false;
+        if (filtroEstado && estadoDe(i) !== filtroEstado) return false;
+        const fechaLocal = new Date(i.fecha);
+        const dia = Number.isNaN(fechaLocal.getTime()) ? "" : [fechaLocal.getFullYear(), String(fechaLocal.getMonth() + 1).padStart(2, "0"), String(fechaLocal.getDate()).padStart(2, "0")].join("-");
+        if (desde && dia < desde) return false;
+        if (hasta && dia > hasta) return false;
         if (!texto) return true;
         const nombreFuente = (fuentesById[i.fuente_id] || "").toLowerCase();
-        return nombreFuente.includes(texto) || (i.inspector || "").toLowerCase().includes(texto);
+        return [nombreFuente, i.inspector, i.parametro, i.observaciones, i.referencia_dato].some((v) => String(v || "").toLowerCase().includes(texto));
       });
 
     const totalPaginas = Math.max(1, Math.ceil(filas.length / HISTORICO_POR_PAGINA));
+    paginaHistorialFiltrada = filas;
     paginaHistorico = Math.min(paginaHistorico, totalPaginas);
     const inicio = (paginaHistorico - 1) * HISTORICO_POR_PAGINA;
     const filasPagina = filas.slice(inicio, inicio + HISTORICO_POR_PAGINA);
@@ -154,15 +184,16 @@ const UI = (() => {
           (i) => `
       <tr>
         <td>${fmtFecha(i.fecha)}</td>
-        <td>${escapeHTML(fuentesById[i.fuente_id] || i.fuente_id)}</td>
-        <td>${i.matriz === "agua" ? "Agua" : "Aire"}</td>
+        <td><button class="history-map-button" type="button" data-view-map="${escapeHTML(i.fuente_id)}" title="Ver esta fuente en el mapa">${escapeHTML(fuentesById[i.fuente_id] || i.fuente_id)}<span aria-hidden="true"> ↗</span></button></td>
+        <td>${titulo(i.matriz)}</td>
         <td>${escapeHTML(i.parametro)}</td>
         <td>${escapeHTML(i.valor)} ${escapeHTML(i.unidad || "")}</td>
-        <td><span class="status-pill ${i.cumple ? "status-pill--ok" : "status-pill--alert"}">${i.cumple ? "En regla" : "Alerta"}</span></td>
+        <td>${pillEstado(estadoDe(i))}</td>
         <td>${escapeHTML(i.inspector)}</td>
+        <td>${titulo(i.origen_dato || "campo")}</td>
       </tr>`
         )
-        .join("") || `<tr><td colspan="7" class="table-empty">${filas.length ? "No hay coincidencias." : "Aún no hay inspecciones registradas."}</td></tr>`;
+        .join("") || `<tr><td colspan="8" class="table-empty">${filas.length ? "No hay coincidencias." : "Aún no hay inspecciones registradas."}</td></tr>`;
     renderPaginacionHistorico(filas.length);
   }
 
@@ -202,34 +233,140 @@ const UI = (() => {
     estado.textContent = `${primero}–${ultimo} de ${total} inspecciones`;
     nav.appendChild(estado);
   }
+  function renderPaginacionLista(id, total, porPagina, pagina, onChange) {
+    const nav = document.getElementById(id);
+    nav.replaceChildren();
+    const totalPaginas = Math.ceil(total / porPagina);
+    nav.hidden = totalPaginas <= 1;
+    if (nav.hidden) return;
+    const add = (label, target, disabled = false) => {
+      const button = document.createElement("button");
+      button.type = "button"; button.className = `pagination__button${target === pagina ? " is-current" : ""}`;
+      button.textContent = label; button.disabled = disabled; button.setAttribute("aria-label", label === "‹" ? "Página anterior" : label === "›" ? "Página siguiente" : `Página ${target}`);
+      if (target === pagina) button.setAttribute("aria-current", "page");
+      button.addEventListener("click", () => onChange(target)); nav.append(button);
+    };
+    add("‹", pagina - 1, pagina === 1);
+    let start = Math.max(1, pagina - 2), end = Math.min(totalPaginas, start + 4);
+    start = Math.max(1, end - 4);
+    for (let n = start; n <= end; n += 1) add(String(n), n);
+    add("›", pagina + 1, pagina === totalPaginas);
+    const status = document.createElement("span"); status.className = "pagination__status";
+    status.textContent = `${(pagina - 1) * porPagina + 1}–${Math.min(pagina * porPagina, total)} de ${total}`; nav.append(status);
+  }
   function renderResumen() {
     const tbodyFuentes = document.querySelector("#tablaResumenFuentes tbody");
-    tbodyFuentes.innerHTML = fuentesConEstado()
+    const listadoFuentes = fuentesConEstado();
+    const paginasFuentes = Math.max(1, Math.ceil(listadoFuentes.length / FUENTES_POR_PAGINA));
+    paginaFuentes = Math.min(paginaFuentes, paginasFuentes);
+    tbodyFuentes.innerHTML = listadoFuentes.slice((paginaFuentes - 1) * FUENTES_POR_PAGINA, paginaFuentes * FUENTES_POR_PAGINA)
       .map(
         (f) => `
       <tr>
         <td>${escapeHTML(f.nombre)}</td>
-        <td>${f.tipo === "agua" ? "Agua" : "Aire"}</td>
+        <td>${escapeHTML(titulo(f.tipo))} · ${escapeHTML(titulo(f.categoria_fuente || "otro"))}</td>
         <td>${escapeHTML(f.ubicacion || "Sin referencia")}<br><small>${Number(f.lat).toFixed(5)}, ${Number(f.lng).toFixed(5)}</small></td>
         <td>${f.ultimaMedicion || "Sin mediciones"}</td>
-        <td><span class="status-pill ${f.estado === "alerta" ? "status-pill--alert" : f.estado === "ok" ? "status-pill--ok" : ""}">
-          ${f.estado === "alerta" ? "Alerta" : f.estado === "ok" ? "En regla" : "Sin datos"}
-        </span></td>
+        <td>${pillEstado(f.estado === "sin_datos" ? "sin_referencia" : f.estado)}</td>
+        <td><button class="btn btn--small btn--ghost" type="button" data-open-profile="${escapeHTML(f.id)}">Ver expediente</button></td>
       </tr>`
       )
-      .join("") || `<tr><td colspan="5" class="table-empty">Aún no hay fuentes registradas.</td></tr>`;
+      .join("") || `<tr><td colspan="6" class="table-empty">Aún no hay fuentes registradas.</td></tr>`;
 
     const tbodyLimites = document.querySelector("#tablaLimites tbody");
-    tbodyLimites.innerHTML = Inspections.limites
-      .map(
-        (l) => `<tr><td>${l.matriz === "agua" ? "Agua" : "Aire"}</td><td>${escapeHTML(l.parametro)}</td><td>${escapeHTML(l.limite)}</td><td>${escapeHTML(l.unidad)}</td></tr>`
-      )
+    const listadoLimites = Inspections.limites;
+    const paginasLimites = Math.max(1, Math.ceil(listadoLimites.length / LIMITES_POR_PAGINA));
+    paginaLimites = Math.min(paginaLimites, paginasLimites);
+    tbodyLimites.innerHTML = listadoLimites.slice((paginaLimites - 1) * LIMITES_POR_PAGINA, paginaLimites * LIMITES_POR_PAGINA)
+      .map((l) => `<tr><td>${titulo(l.matriz)}</td><td>${escapeHTML(l.parametro)}</td><td>${l.limite == null ? "Sin criterio cargado" : escapeHTML(l.limite)}</td><td>${l.umbral_aviso == null ? "—" : escapeHTML(l.umbral_aviso)}</td><td>${escapeHTML(l.unidad)}</td><td>${escapeHTML(l.referencia_normativa || "Sin referencia normativa documentada")}</td></tr>`)
       .join("");
+    renderPaginacionLista("paginacionFuentes", listadoFuentes.length, FUENTES_POR_PAGINA, paginaFuentes, (pagina) => { paginaFuentes = pagina; renderResumen(); });
+    renderPaginacionLista("paginacionLimites", listadoLimites.length, LIMITES_POR_PAGINA, paginaLimites, (pagina) => { paginaLimites = pagina; renderResumen(); });
+    tbodyFuentes.onclick = (event) => {
+      const button = event.target.closest("[data-open-profile]");
+      if (button) abrirExpediente(button.dataset.openProfile);
+    };
+  }
+  function dibujarGrafico(rows) {
+    const holder = document.getElementById("profileChart");
+    holder.replaceChildren();
+    const values = rows.map((r) => Number(r.valor)).filter(Number.isFinite);
+    if (values.length < 1) { holder.textContent = "No hay mediciones para este parámetro."; return; }
+    const width = 760, height = 250, pad = 42;
+    const min = Math.min(0, ...values), max = Math.max(...values);
+    const span = max - min || 1;
+    const points = rows.map((r, index) => ({ r, x: pad + (rows.length === 1 ? (width - pad * 2) / 2 : index * (width - pad * 2) / (rows.length - 1)), y: height - pad - ((Number(r.valor) - min) / span) * (height - pad * 2) }));
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "Tendencia histórica de mediciones");
+    const axis = document.createElementNS(svg.namespaceURI, "path"); axis.setAttribute("d", `M${pad} ${pad} V${height-pad} H${width-pad}`); axis.setAttribute("class", "chart-axis"); svg.append(axis);
+    const poly = document.createElementNS(svg.namespaceURI, "polyline"); poly.setAttribute("points", points.map((p) => `${p.x},${p.y}`).join(" ")); poly.setAttribute("class", "chart-line"); svg.append(poly);
+    points.forEach((p) => { const c = document.createElementNS(svg.namespaceURI, "circle"); c.setAttribute("cx", p.x); c.setAttribute("cy", p.y); c.setAttribute("r", "5"); c.setAttribute("class", "chart-point"); const titleEl = document.createElementNS(svg.namespaceURI, "title"); titleEl.textContent = `${fmtFecha(p.r.fecha)}: ${p.r.valor} ${p.r.unidad || ""}`; c.append(titleEl); svg.append(c); });
+    holder.append(svg);
+  }
+  async function abrirExpediente(id) {
+    const fuente = fuentes.find((f) => String(f.id) === String(id));
+    if (!fuente) return;
+    if (String(fuentePerfilActiva?.id) !== String(fuente.id)) paginaHistorialPerfil = 1;
+    fuentePerfilActiva = fuente;
+    const rows = inspecciones.filter((i) => String(i.fuente_id) === String(id)).sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+    paginaHistorialPerfil = Math.min(paginaHistorialPerfil, Math.max(1, Math.ceil(rows.length / HISTORIAL_PERFIL_POR_PAGINA)));
+    document.getElementById("profileTitle").textContent = fuente.nombre;
+    document.getElementById("profileLocation").textContent = `${titulo(fuente.tipo)} · ${fuente.ubicacion || "Sin referencia del sitio"} · ${Number(fuente.lat).toFixed(5)}, ${Number(fuente.lng).toFixed(5)}`;
+    const metricas = document.getElementById("profileMetrics");
+    const ultima = rows.at(-1);
+    metricas.innerHTML = `<div><small>Categoría</small><strong>${escapeHTML(titulo(fuente.categoria_fuente || "otro"))}</strong></div><div><small>Mediciones</small><strong>${rows.length}</strong></div><div><small>Última lectura</small><strong>${ultima ? `${escapeHTML(ultima.valor)} ${escapeHTML(ultima.unidad || "")}` : "Sin datos"}</strong></div><div><small>Estado actual</small>${ultima ? pillEstado(estadoDe(ultima)) : pillEstado("sin_referencia")}</div>`;
+    const params = [...new Map(rows.map((r) => [`${r.matriz}|${r.parametro}|${r.unidad || ""}`, r])).entries()];
+    const select = document.getElementById("profileParameter");
+    select.innerHTML = params.map(([key, r]) => `<option value="${escapeHTML(key)}">${escapeHTML(titulo(r.matriz))} · ${escapeHTML(r.parametro)} (${escapeHTML(r.unidad || "")})</option>`).join("");
+    const updateGraph = () => {
+      const [matriz, parametro, unidad] = (select.value || "").split("|");
+      const same = rows.filter((r) => r.matriz === matriz && r.parametro === parametro && (r.unidad || "") === unidad);
+      dibujarGrafico(same);
+      const first = same[0], last = same.at(-1);
+      const trend = document.getElementById("profileTrend");
+      if (!first || !last || first === last) trend.textContent = "Se requieren al menos dos mediciones comparables para observar una tendencia.";
+      else if (estadoDe(first) === "sin_referencia" || estadoDe(last) === "sin_referencia") trend.textContent = `Variación de ${first.valor} a ${last.valor} ${unidad}. Sin criterio normativo vigente; la variación no determina mejora ni cumplimiento.`;
+      else {
+        const a = { alerta: 3, intermedio: 2, bueno: 1 }[estadoDe(first)], b = { alerta: 3, intermedio: 2, bueno: 1 }[estadoDe(last)];
+        trend.textContent = b < a ? "Mejora según el criterio configurado." : b > a ? "Empeora según el criterio configurado." : "Se mantiene en el mismo rango del criterio configurado.";
+      }
+      document.getElementById("profileChartNote").textContent = `Comparación solo de ${parametro || "parámetros"} con unidad ${unidad || ""}. El umbral preventivo de SID-FC no equivale a una norma.`;
+    };
+    select.onchange = updateGraph; updateGraph();
+    const lecturasPerfil = [...rows].reverse();
+    document.querySelector("#profileHistory tbody").innerHTML = lecturasPerfil.slice((paginaHistorialPerfil - 1) * HISTORIAL_PERFIL_POR_PAGINA, paginaHistorialPerfil * HISTORIAL_PERFIL_POR_PAGINA).map((r) => `<tr><td>${fmtFecha(r.fecha)}</td><td>${escapeHTML(titulo(r.matriz))} · ${escapeHTML(r.parametro)}</td><td>${escapeHTML(r.valor)} ${escapeHTML(r.unidad || "")}</td><td>${pillEstado(estadoDe(r))}</td><td>${escapeHTML(titulo(r.origen_dato || "campo"))}${r.referencia_dato ? `<br><small>${escapeHTML(r.referencia_dato)}</small>` : ""}${r.metodo_muestreo ? `<br><small>${escapeHTML(r.metodo_muestreo)}</small>` : ""}</td><td>${escapeHTML(r.observaciones || "—")}</td></tr>`).join("") || '<tr><td colspan="6" class="table-empty">Aún no hay mediciones para esta fuente.</td></tr>';
+    renderPaginacionLista("paginacionProfileHistory", lecturasPerfil.length, HISTORIAL_PERFIL_POR_PAGINA, paginaHistorialPerfil, (pagina) => { paginaHistorialPerfil = pagina; abrirExpediente(fuente.id); });
+    const inspectionSelect = document.getElementById("profilePhotoInspection");
+    inspectionSelect.innerHTML = '<option value="">Evidencia general de la fuente</option>' + [...rows].reverse().map((r) => `<option value="${escapeHTML(r.id)}">${escapeHTML(fmtFecha(r.fecha))} · ${escapeHTML(r.parametro)}</option>`).join("");
+    const upload = document.getElementById("profileEvidenceForm");
+    upload.hidden = !Auth.user() || !DB.hasEvidenceStorage();
+    document.getElementById("profileEvidenceNotice").textContent = DB.hasEvidenceStorage() ? (Auth.user() ? "Las imágenes se guardan en almacenamiento privado y solo son visibles para usuarios con sesión." : "Inicia sesión para agregar o ver evidencias fotográficas.") : "La evidencia fotográfica requiere la conexión configurada con Supabase Storage.";
+    const gallery = document.getElementById("profileEvidenceGallery"); gallery.replaceChildren();
+    if (Auth.user() && DB.hasEvidenceStorage()) {
+      try {
+        const evidencias = await DB.getEvidencias(id);
+        evidencias.forEach((item) => { const card = document.createElement("figure"); card.className = "evidence-card"; const img = document.createElement("img"); img.src = item.url; img.alt = item.descripcion || "Evidencia fotográfica de fuente"; img.loading = "lazy"; card.append(img); const cap = document.createElement("figcaption"); cap.textContent = `${item.descripcion || "Evidencia"} · ${fmtFecha(item.creado_en)}`; card.append(cap); gallery.append(card); });
+      } catch (error) { document.getElementById("profileEvidenceNotice").textContent = `No se pudieron cargar evidencias: ${error.message}`; }
+    }
+    openModal("modalExpediente");
   }
   async function refrescarDatos() {
     [fuentes, inspecciones] = await Promise.all([DB.getFuentes(), DB.getInspecciones()]);
+    if (Auth.user() && DB.hasEvidenceStorage()) {
+      let fotos = {};
+      try { fotos = await DB.getEvidenciasMapa(fuentes.map((f) => f.id)); } catch {}
+      fuentes = fuentes.map((fuente) => ({ ...fuente, _fotoMapa: fotos[fuente.id] || null }));
+    } else {
+      fuentes = fuentes.map((fuente) => ({ ...fuente, _fotoMapa: null }));
+    }
     paginaHistorico = 1;
     poblarFuentesSelect();
+    const filtroFuente = document.getElementById("filtroFuenteHistorico");
+    if (filtroFuente) {
+      const seleccionado = filtroFuente.value;
+      filtroFuente.innerHTML = '<option value="">Todas</option>' + fuentes.map((f) => `<option value="${escapeHTML(f.id)}">${escapeHTML(f.nombre)}</option>`).join("");
+      filtroFuente.value = seleccionado;
+    }
     renderStats();
     renderMap();
     renderHistorico(document.getElementById("buscarHistorico").value);
@@ -251,9 +388,9 @@ const UI = (() => {
       tag.textContent = nombreVisible;
       tag.title = u.email || "";
       btnLogin.textContent = "Cerrar sesión";
-      btnNuevaFuente.disabled = false;
-      btnInsp.disabled = false;
-      btnGuardar.disabled = false;
+      btnNuevaFuente.disabled = !datosDisponibles;
+      btnInsp.disabled = !datosDisponibles;
+      btnGuardar.disabled = !datosDisponibles;
       hint.hidden = true;
       const inspector = document.getElementById("fInspector");
       if (inspector && !inspector.value) {
@@ -283,28 +420,32 @@ const UI = (() => {
   }
   function openModal(id, { preserveForm = false } = {}) {
     const backdrop = document.getElementById(id);
+    if (backdrop.hidden) backdrop._returnFocus = document.activeElement;
     backdrop.hidden = false;
     document.body.classList.add("has-modal-open");
     if (id === "modalFuente") {
       if (!preserveForm) document.getElementById("formFuente").reset();
       document.getElementById("fuenteError").hidden = true;
-    } else {
+    } else if (id === "modalLogin") {
       document.getElementById("loginError").hidden = true;
     }
     backdrop.querySelector("input, select, textarea, button")?.focus();
   }
   function closeModal(id) {
-    document.getElementById(id).hidden = true;
+    const backdrop = document.getElementById(id);
+    backdrop.hidden = true;
+    backdrop._returnFocus?.focus();
     if (![...document.querySelectorAll(".modal-backdrop")].some((modal) => !modal.hidden)) {
       document.body.classList.remove("has-modal-open");
     }
   }
 
   function wireLoginModal() {
-    document.getElementById("btnLogin").addEventListener("click", () => {
+    document.getElementById("btnLogin").addEventListener("click", async () => {
       if (Auth.user()) {
-        Auth.logout();
+        await Auth.logout();
         reflejarSesion();
+        refrescarDatos().catch(() => {});
         toast("Sesión cerrada.");
         return;
       }
@@ -329,6 +470,7 @@ const UI = (() => {
         closeModal("modalLogin");
         e.target.reset();
         reflejarSesion();
+        try { await refrescarDatos(); } catch {}
         toast("Sesión iniciada correctamente.");
         if (abrirFuenteDespuesDelLogin) {
           abrirFuenteDespuesDelLogin = false;
@@ -429,6 +571,7 @@ const UI = (() => {
       errorEl.hidden = true;
       const nombre = document.getElementById("nfNombre").value.trim();
       const tipo = document.getElementById("nfCategoria").value;
+      const categoria_fuente = document.getElementById("nfCategoriaFuente").value;
       const ubicacion = document.getElementById("nfUbicacion").value.trim();
       const lat = parseFloat(document.getElementById("nfLat").value);
       const lng = parseFloat(document.getElementById("nfLng").value);
@@ -438,7 +581,7 @@ const UI = (() => {
         return;
       }
       try {
-        const nuevaFuente = await DB.addFuente({ nombre, tipo, ubicacion, lat, lng });
+        const nuevaFuente = await DB.addFuente({ nombre, tipo, categoria_fuente, ubicacion, lat, lng });
         const volverAInspeccion = regresarAInspeccionDespuesDeFuente;
         cerrarFuenteModal();
         await refrescarDatos();
@@ -478,34 +621,47 @@ const UI = (() => {
       const valor = parseFloat(document.getElementById("fValor").value);
       const fecha = document.getElementById("fFecha").value;
       const observaciones = document.getElementById("fObservaciones").value.trim();
+      const origen_dato = document.getElementById("fOrigenDato").value;
+      const metodo_muestreo = document.getElementById("fMetodo").value.trim();
+      const referencia_dato = document.getElementById("fReferenciaDato").value.trim();
 
-      if (!fuente_id || !inspector || Number.isNaN(valor) || !fecha) {
+      if (!fuente_id || !inspector || !Number.isFinite(valor) || valor < 0 || !parametro || !fecha) {
         toast("Completa todos los campos obligatorios.", true);
         return;
       }
 
       const fuente = fuentes.find((f) => String(f.id) === fuente_id);
-      if (!fuente || fuente.tipo !== matriz) {
-        toast("La matriz de medición debe coincidir con el tipo de la fuente.", true);
+      if (!fuente) {
+        toast("Selecciona una fuente válida.", true);
         return;
       }
-      const evalRes = Inspections.evaluar(matriz, parametro, valor);
+      if ((origen_dato === "oficial" || origen_dato === "laboratorio") && !referencia_dato) {
+        toast("Agrega la institución o referencia verificable de este dato.", true);
+        document.getElementById("fReferenciaDato").focus();
+        return;
+      }
+      const evalRes = Inspections.evaluar(matriz, parametro, valor, fecha);
       const registro = {
-        fuente_id, inspector, matriz, parametro, valor, fecha,
-        observaciones, unidad: evalRes.unidad, cumple: evalRes.cumple,
+        fuente_id, inspector, matriz, parametro, valor, fecha: new Date(fecha).toISOString(),
+        observaciones, unidad: evalRes.unidad, cumple: evalRes.cumple, estado: evalRes.estado,
+        origen_dato, metodo_muestreo, referencia_dato,
       };
 
       try {
         await DB.addInspeccion(registro);
         e.target.reset();
-        document.getElementById("fFecha").value = "";
+        document.getElementById("fFecha").value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
         ajustarMatrizFuente();
         await refrescarDatos();
         toast(
-          evalRes.cumple
-            ? "Medición guardada: dentro del límite permitido ✅"
-            : `⚠️ Medición supera el LMP (${evalRes.limite} ${evalRes.unidad}) — fuente marcada en alerta.`,
-          !evalRes.cumple
+          evalRes.estado === "alerta"
+            ? `⚠️ Lectura sobre el criterio configurado (${evalRes.limite} ${evalRes.unidad}).`
+            : evalRes.estado === "intermedio"
+              ? "Medición guardada en rango preventivo SID-FC."
+              : evalRes.estado === "sin_referencia"
+                ? "Medición guardada; no hay criterio vigente para interpretarla."
+                : "Medición guardada bajo el criterio configurado.",
+          evalRes.estado === "alerta"
         );
       } catch (err) {
         toast("No se pudo guardar la medición: " + err.message, true);
@@ -534,6 +690,59 @@ const UI = (() => {
       if (!boton || boton.disabled) return;
       paginaHistorico = Number(boton.dataset.historyPage);
       renderHistorico(document.getElementById("buscarHistorico").value);
+    });
+    document.querySelector("#tablaHistorico tbody").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-view-map]");
+      if (button) irAlMapaDeFuente(button.dataset.viewMap);
+    });
+    ["filtroFuenteHistorico", "filtroMatrizHistorico", "filtroEstadoHistorico", "filtroFechaDesde", "filtroFechaHasta"].forEach((id) => {
+      document.getElementById(id).addEventListener("change", () => { paginaHistorico = 1; renderHistorico(document.getElementById("buscarHistorico").value); });
+    });
+    document.getElementById("btnLimpiarFiltrosHistorico").addEventListener("click", () => {
+      ["filtroFuenteHistorico", "filtroMatrizHistorico", "filtroEstadoHistorico", "filtroFechaDesde", "filtroFechaHasta", "buscarHistorico"].forEach((id) => { document.getElementById(id).value = ""; });
+      paginaHistorico = 1; renderHistorico("");
+    });
+  }
+
+  function irAlMapaDeFuente(id) {
+    navegarA("inventario");
+    filtroActual = "todas";
+    document.querySelectorAll(".filter-tab").forEach((button) => {
+      const active = button.dataset.filter === "todas";
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+    renderMap();
+    requestAnimationFrame(() => {
+      SIDMap.focusFuente(id);
+      document.getElementById("map").scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  }
+
+  function wireExpedientes() {
+    document.getElementById("btnCloseProfile").addEventListener("click", () => closeModal("modalExpediente"));
+    document.getElementById("modalExpediente").addEventListener("click", (event) => { if (event.target.id === "modalExpediente") closeModal("modalExpediente"); });
+    document.getElementById("profileEvidenceForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const file = document.getElementById("profilePhoto").files[0];
+      const photoUrl = document.getElementById("profilePhotoUrl").value.trim();
+      const status = document.getElementById("profileEvidenceNotice");
+      if (!fuentePerfilActiva) return;
+      if (Boolean(file) === Boolean(photoUrl)) { status.textContent = "Elige un archivo o pega una URL, pero solo una opción."; return; }
+      if (file && (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > 5 * 1024 * 1024)) { status.textContent = "Elige una imagen JPG, PNG o WebP de hasta 5 MB."; return; }
+      if (photoUrl) {
+        try { if (new URL(photoUrl).protocol !== "https:") throw new Error(); }
+        catch { status.textContent = "Pega una URL válida que comience con https://."; return; }
+      }
+      const submit = event.currentTarget.querySelector('[type="submit"]'); submit.disabled = true;
+      try {
+        await DB.addEvidencia({ fuenteId: fuentePerfilActiva.id, inspeccionId: document.getElementById("profilePhotoInspection").value, file, photoUrl, descripcion: document.getElementById("profilePhotoDescription").value.trim() });
+        document.getElementById("profileEvidenceForm").reset();
+        status.textContent = "Evidencia guardada.";
+        await refrescarDatos();
+        await abrirExpediente(fuentePerfilActiva.id);
+      } catch (error) { status.textContent = error.message; }
+      finally { submit.disabled = false; }
     });
   }
 
@@ -592,6 +801,7 @@ const UI = (() => {
     const form = document.getElementById("contactForm");
     if (!form) return;
     const status = document.getElementById("contactFormStatus");
+    form.addEventListener("input", (event) => event.target.setCustomValidity?.(""));
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const nombre = form.elements.namedItem("nombre");
@@ -599,9 +809,9 @@ const UI = (() => {
       const comentario = form.elements.namedItem("comentario");
       nombre.value = nombre.value.trim().replace(/\s+/g, " ");
       comentario.value = comentario.value.trim();
-      nombre.setCustomValidity(nombre.value.split(" ").length >= 2 ? "" : "Escribe tu nombre y al menos un apellido.");
+      nombre.setCustomValidity(nombre.value.split(" ").length >= 2 && /^[\p{L}\p{M} .'-]+$/u.test(nombre.value) ? "" : "Escribe tu nombre y al menos un apellido.");
       const digitosCelular = celular.value.replace(/\D/g, "").length;
-      if (digitosCelular < 8 || digitosCelular > 15) {
+      if (digitosCelular < 8 || digitosCelular > 15 || !/^[+0-9() .-]+$/.test(celular.value)) {
         celular.setCustomValidity("El celular debe tener entre 8 y 15 dígitos.");
       } else {
         celular.setCustomValidity("");
@@ -632,12 +842,12 @@ const UI = (() => {
   }
 
   function wireReporte() {
-    document.getElementById("btnReporte").addEventListener("click", () => {
+    const generarResumen = () => {
       const conEstado = fuentesConEstado();
       const filasFuentes = conEstado
         .map(
-          (f) => `<tr><td>${escapeHTML(f.nombre)}</td><td>${f.tipo === "agua" ? "Agua" : "Aire"}</td>
-          <td class="${f.estado === "alerta" ? "alerta" : "ok"}">${f.estado === "alerta" ? "Alerta roja" : f.estado === "ok" ? "En regla" : "Sin datos"}</td>
+          (f) => `<tr><td>${escapeHTML(f.nombre)}</td><td>${escapeHTML(titulo(f.tipo))} · ${escapeHTML(titulo(f.categoria_fuente || "otro"))}</td>
+          <td class="${f.estado === "alerta" ? "alerta" : "ok"}">${f.estado === "sin_datos" ? "Sin datos" : titulo(f.estado)}</td>
           <td>${f.ultimaMedicion || "—"}</td></tr>`
         )
         .join("");
@@ -649,23 +859,23 @@ const UI = (() => {
           Documento generado por SID-FC (prototipo académico UTP). Las alertas son de carácter
           informativo y no constituyen una determinación legal de incumplimiento ambiental.
         </p>`;
-      SIDExport.reportePDF(html);
-    });
+      try { SIDExport.reportePDF(html); } catch (error) { toast(error.message, true); }
+    };
+    const generarHistorico = () => {
+      const filas = paginaHistorialFiltrada.map((i) => `<tr><td>${escapeHTML(fmtFecha(i.fecha))}</td><td>${escapeHTML(fuentes.find((f) => String(f.id) === String(i.fuente_id))?.nombre || i.fuente_id)}</td><td>${escapeHTML(titulo(i.matriz))}</td><td>${escapeHTML(i.parametro)}</td><td>${escapeHTML(i.valor)} ${escapeHTML(i.unidad || "")}</td><td>${escapeHTML(titulo(estadoDe(i)))}</td><td>${escapeHTML(i.inspector)}</td><td>${escapeHTML(titulo(i.origen_dato || "campo"))}</td></tr>`).join("");
+      try { SIDExport.reportePDF(`<h2>Historial completo de mediciones filtrado</h2><p>${paginaHistorialFiltrada.length} registros. Reporte incluye todas las visitas coincidentes.</p><table><thead><tr><th>Fecha</th><th>Fuente</th><th>Medio</th><th>Parámetro</th><th>Valor</th><th>Estado</th><th>Registrado por</th><th>Origen</th></tr></thead><tbody>${filas}</tbody></table><p style="margin-top:2rem;font-size:.8rem;color:#666">Los estados reflejan criterios configurados en SID-FC y no determinan por sí solos incumplimiento legal.</p>`); } catch (error) { toast(error.message, true); }
+    };
+    document.getElementById("btnReporte").addEventListener("click", generarResumen);
+    document.getElementById("btnReporteResumen").addEventListener("click", generarResumen);
+    document.getElementById("btnReporteHistorial").addEventListener("click", generarHistorico);
   }
 
   function wireExportFooter() {
-    document.getElementById("footerExportJson").addEventListener("click", () => SIDExport.exportJSON());
-    document.getElementById("footerExportCsv").addEventListener("click", () => SIDExport.exportCSV());
+    document.getElementById("footerExportJson").addEventListener("click", () => SIDExport.exportJSON().catch((error) => toast("No se pudo exportar: " + error.message, true)));
+    document.getElementById("footerExportCsv").addEventListener("click", () => SIDExport.exportCSV().catch((error) => toast("No se pudo exportar: " + error.message, true)));
   }
 
   async function init() {
-    await DB.init();
-    await Inspections.cargarLimites();
-    await Auth.restore();
-
-    document.getElementById("dbModeTag").textContent =
-      "Modo: " + (DB.mode() === "supabase" ? "Conectado a Supabase" : "Demo (localStorage)");
-
     wireTabs(".tab", "tab-");
     wireNavigation();
     wireContactForm();
@@ -674,12 +884,24 @@ const UI = (() => {
     wireLoginModal();
     wireFuenteModal();
     wireInspeccionForm();
+    wireExpedientes();
     document.addEventListener("keydown", (event) => {
+      if (event.key === "Tab") {
+        const modal = [...document.querySelectorAll(".modal-backdrop")].find((el) => !el.hidden);
+        const focusable = modal && [...modal.querySelectorAll("button, input, select, textarea, a[href]")].filter((el) => !el.disabled && el.getClientRects().length);
+        if (focusable?.length) {
+          const first = focusable[0], last = focusable.at(-1);
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
+      }
       if (event.key === "Escape") {
         if (!document.getElementById("modalFuente").hidden) {
           document.getElementById("btnCancelFuente").click();
         } else if (!document.getElementById("modalLogin").hidden) {
           closeModal("modalLogin");
+        } else if (!document.getElementById("modalExpediente").hidden) {
+          closeModal("modalExpediente");
         }
       }
     });
@@ -688,8 +910,49 @@ const UI = (() => {
     wireExportFooter();
     reflejarSesion();
 
-    poblarParametros();
-    await refrescarDatos();
+    document.getElementById("btnRetryConnection").addEventListener("click", cargarDatos);
+    window.addEventListener("online", cargarDatos);
+    await DB.init();
+    await cargarDatos();
+  }
+
+  async function cargarDatos() {
+    if (cargandoDatos) return;
+    cargandoDatos = true;
+    const notice = document.getElementById("connectionNotice");
+    const title = document.getElementById("connectionTitle");
+    const message = document.getElementById("connectionMessage");
+    const retry = document.getElementById("btnRetryConnection");
+    notice.hidden = false; notice.classList.remove("is-error"); retry.hidden = true;
+    title.textContent = "Conectando con el inventario";
+    message.textContent = "La navegación está disponible mientras cargan los registros.";
+    try {
+      await Promise.all([Inspections.cargarLimites(), Auth.restore()]);
+      await refrescarDatos();
+      datosDisponibles = true;
+      poblarParametros();
+      notice.hidden = true;
+      document.getElementById("dbModeTag").textContent = DB.mode() === "supabase" ? "Datos sincronizados" : "Demostración local";
+    } catch (error) {
+      datosDisponibles = false;
+      title.textContent = "Servicio de datos no disponible";
+      message.textContent = "No se pudieron consultar los registros. Reintenta en unos momentos; la navegación y el contacto siguen disponibles.";
+      notice.classList.add("is-error"); retry.hidden = false;
+      document.getElementById("dbModeTag").textContent = "Sin conexión al servicio de datos";
+      ["statTotal", "statOk", "statAlert", "statMes"].forEach((id) => { document.getElementById(id).textContent = "—"; });
+      ["tablaHistorico", "tablaResumenFuentes", "tablaLimites"].forEach((id) => {
+        const table = document.getElementById(id);
+        table.querySelector("tbody").innerHTML = `<tr><td colspan="${table.querySelectorAll("th").length}" class="table-empty">Registros no disponibles. Usa Reintentar conexión para volver a consultarlos.</td></tr>`;
+      });
+      document.getElementById("fFuenteHelp").textContent = "Conecta con el servicio de datos para seleccionar un punto de monitoreo.";
+      console.error("SID-FC: error al cargar datos", error);
+    } finally {
+      cargandoDatos = false;
+      document.querySelectorAll(".history-filters input, .history-filters select, #btnLimpiarFiltrosHistorico").forEach((el) => { el.disabled = !datosDisponibles; });
+      if (!datosDisponibles) document.querySelectorAll(".pagination").forEach((el) => { el.hidden = true; });
+      reflejarSesion();
+      ["btnReporte", "btnReporteHistorial", "btnReporteResumen", "footerExportJson", "footerExportCsv"].forEach((id) => { document.getElementById(id).disabled = !datosDisponibles; });
+    }
   }
 
   return { init };
