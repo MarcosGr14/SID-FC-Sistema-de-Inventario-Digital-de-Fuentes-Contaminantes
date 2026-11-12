@@ -39,7 +39,7 @@ const SIDExport = (() => {
     const header = ["Fecha", "Fuente", "Categoría de fuente", "Ubicación", "Latitud", "Longitud", "Medio", "Parámetro", "Valor", "Unidad", "Estado SID-FC", "Origen del dato", "Método", "Procedencia", "Inspector", "Observaciones"];
     const rows = inspecciones.map((i) => [
       i.fecha,
-      fuentesById[i.fuente_id]?.nombre || i.fuente_id,
+      fuentesById[i.fuente_id]?.nombre.replace(/^\[DEMO\]\s*/i, "") || i.fuente_id,
       fuentesById[i.fuente_id]?.categoria_fuente || "",
       fuentesById[i.fuente_id]?.ubicacion || "",
       fuentesById[i.fuente_id]?.lat ?? "",

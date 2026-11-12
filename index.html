@@ -15,7 +15,7 @@
 
 <link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css"/>
 
-<link rel="stylesheet" href="css/style.css?v=20261112">
+<link rel="stylesheet" href="css/style.css?v=20261112.3">
 </head>
 <body>
 
@@ -458,14 +458,21 @@
     </section>
     <section class="profile-section">
       <div class="profile-section__heading"><div><h3>Evidencia fotográfica</h3><p id="profileEvidenceNotice" class="section-note"></p></div></div>
-      <form id="profileEvidenceForm" class="evidence-upload" hidden>
-        <label class="field"><span>Cargar fotografía (JPG, PNG o WebP, máximo 5 MB)</span><input id="profilePhoto" type="file" accept="image/jpeg,image/png,image/webp"></label>
-        <label class="field"><span>O pegar URL de fotografía</span><input id="profilePhotoUrl" type="url" inputmode="url" placeholder="https://sitio.com/imagen.jpg"><small class="field-help">Usa el enlace HTTPS directo al archivo de imagen.</small></label>
-        <label class="field"><span>Descripción</span><input id="profilePhotoDescription" type="text" maxlength="180" placeholder="Vista del punto, condición observada…"></label>
-        <label class="field"><span>Asociar a una medición</span><select id="profilePhotoInspection"><option value="">Evidencia general de la fuente</option></select></label>
-        <button class="btn btn--accent" type="submit">Subir evidencia</button>
-      </form>
-      <div class="evidence-gallery" id="profileEvidenceGallery"></div>
+      <div class="profile-evidence-layout">
+        <div class="evidence-gallery" id="profileEvidenceGallery"></div>
+        <form id="profileEvidenceForm" class="evidence-upload" hidden>
+          <div class="evidence-upload__heading"><h4>Agregar fotografía</h4><p>Adjunta un archivo o utiliza un enlace directo.</p></div>
+          <fieldset class="evidence-mode"><legend>Origen de la imagen</legend>
+            <label><input type="radio" name="photoInputMode" value="file" checked><span>Archivo</span></label>
+            <label><input type="radio" name="photoInputMode" value="url"><span>Enlace web</span></label>
+          </fieldset>
+          <label class="field" id="profilePhotoFileField"><span>Seleccionar imagen</span><input id="profilePhoto" type="file" accept="image/jpeg,image/png,image/webp"><small class="field-help">JPG, PNG o WebP · Máximo 5 MB</small></label>
+          <label class="field" id="profilePhotoUrlField" hidden><span>Enlace de la imagen</span><input id="profilePhotoUrl" type="url" inputmode="url" placeholder="https://sitio.com/imagen.jpg"><small class="field-help">Enlace HTTPS directo a la fotografía.</small></label>
+          <label class="field"><span>Descripción</span><input id="profilePhotoDescription" type="text" maxlength="180" placeholder="Vista general, condición observada…"></label>
+          <label class="field"><span>Asociar a una medición</span><select id="profilePhotoInspection"><option value="">Evidencia general de la fuente</option></select></label>
+          <div class="evidence-upload__actions"><button class="btn btn--accent" type="submit">Guardar fotografía</button></div>
+        </form>
+      </div>
     </section>
   </div>
 </div>
@@ -512,8 +519,8 @@
 <script src="js/map.js?v=20261112"></script>
 <script src="js/auth.js?v=20261112"></script>
 <script src="js/inspections.js?v=20261112"></script>
-<script src="js/export.js?v=20261112"></script>
-<script src="js/ui.js?v=20261112.2"></script>
+<script src="js/export.js?v=20261112.3"></script>
+<script src="js/ui.js?v=20261112.3"></script>
 <script src="js/main.js?v=20261112"></script>
 </body>
 </html>

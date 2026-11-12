@@ -333,7 +333,7 @@ const UI = (() => {
         const a = { alerta: 3, intermedio: 2, bueno: 1 }[estadoDe(first)], b = { alerta: 3, intermedio: 2, bueno: 1 }[estadoDe(last)];
         trend.textContent = b < a ? "Mejora según el criterio configurado." : b > a ? "Empeora según el criterio configurado." : "Se mantiene en el mismo rango del criterio configurado.";
       }
-      document.getElementById("profileChartNote").textContent = `Comparación solo de ${parametro || "parámetros"} con unidad ${unidad || ""}. El umbral preventivo de SID-FC no equivale a una norma.${fuente.nombre.startsWith("[DEMO]") ? " Clasificación DEMO ficticia: consulta sus umbrales en las observaciones de cada medición." : ""}`;
+      document.getElementById("profileChartNote").textContent = `Comparación solo de ${parametro || "parámetros"} con unidad ${unidad || ""}. El umbral preventivo de SID-FC no equivale a una norma.${fuente.esDemostracion ? " Clasificación DEMO ficticia: consulta sus umbrales en las observaciones de cada medición." : ""}`;
     };
     select.onchange = updateGraph; updateGraph();
     const lecturasPerfil = [...rows].reverse();
@@ -343,18 +343,34 @@ const UI = (() => {
     inspectionSelect.innerHTML = '<option value="">Evidencia general de la fuente</option>' + [...rows].reverse().map((r) => `<option value="${escapeHTML(r.id)}">${escapeHTML(fmtFecha(r.fecha))} · ${escapeHTML(r.parametro)}</option>`).join("");
     const upload = document.getElementById("profileEvidenceForm");
     upload.hidden = !Auth.user() || !DB.hasEvidenceStorage();
-    document.getElementById("profileEvidenceNotice").textContent = DB.hasEvidenceStorage() ? (Auth.user() ? "Las imágenes se guardan en almacenamiento privado y solo son visibles para usuarios con sesión." : "Inicia sesión para agregar o ver evidencias fotográficas.") : "La evidencia fotográfica requiere la conexión configurada con Supabase Storage.";
+    document.getElementById("profileEvidenceNotice").textContent = DB.hasEvidenceStorage() ? (Auth.user() ? "Consulta las imágenes de la fuente o adjunta una nueva. Los archivos se guardan de forma privada; los enlaces conservan el acceso de su sitio de origen." : "Inicia sesión para agregar o ver evidencias fotográficas.") : "La evidencia fotográfica requiere la conexión configurada con Supabase Storage.";
     const gallery = document.getElementById("profileEvidenceGallery"); gallery.replaceChildren();
+    if (!Auth.user()) gallery.innerHTML = '<p class="evidence-empty">Las fotografías están disponibles al iniciar sesión.</p>';
     if (Auth.user() && DB.hasEvidenceStorage()) {
       try {
         const evidencias = await DB.getEvidencias(id);
-        evidencias.forEach((item) => { const card = document.createElement("figure"); card.className = "evidence-card"; const img = document.createElement("img"); img.src = item.url; img.alt = item.descripcion || "Evidencia fotográfica de fuente"; img.loading = "lazy"; card.append(img); const cap = document.createElement("figcaption"); cap.textContent = `${item.descripcion || "Evidencia"} · ${fmtFecha(item.creado_en)}`; card.append(cap); gallery.append(card); });
+        if (!evidencias.length) gallery.innerHTML = '<p class="evidence-empty">Todavía no hay fotografías para esta fuente.</p>';
+        evidencias.forEach((item) => {
+          const card = document.createElement("figure"); card.className = "evidence-card";
+          const img = document.createElement("img"); img.src = item.url; img.alt = item.descripcion || "Fotografía de la fuente"; img.loading = "lazy";
+          img.addEventListener("error", () => { img.hidden = true; card.classList.add("evidence-card--unavailable"); }, { once: true });
+          const cap = document.createElement("figcaption");
+          const title = document.createElement("strong"); title.textContent = item.descripcion?.startsWith("DEMO") ? "Fotografía de referencia" : item.descripcion || "Fotografía de la fuente";
+          const date = document.createElement("time"); date.dateTime = item.creado_en; date.textContent = fmtFecha(item.creado_en);
+          cap.append(title, date);
+          if (item.descripcion) {
+            const details = document.createElement("details"); const summary = document.createElement("summary"); summary.textContent = "Procedencia y observaciones";
+            const text = document.createElement("p"); text.textContent = item.descripcion; details.append(summary, text); cap.append(details);
+          }
+          card.append(img, cap); gallery.append(card);
+        });
       } catch (error) { document.getElementById("profileEvidenceNotice").textContent = `No se pudieron cargar evidencias: ${error.message}`; }
     }
     openModal("modalExpediente");
   }
   async function refrescarDatos() {
     [fuentes, inspecciones] = await Promise.all([DB.getFuentes(), DB.getInspecciones()]);
+    fuentes = fuentes.map((f) => ({ ...f, esDemostracion: /^\[DEMO\]\s*/i.test(f.nombre), nombre: f.nombre.replace(/^\[DEMO\]\s*/i, "") }));
     if (Auth.user() && DB.hasEvidenceStorage()) {
       let fotos = {};
       try { fotos = await DB.getEvidenciasMapa(fuentes.map((f) => f.id)); } catch {}
@@ -722,7 +738,15 @@ const UI = (() => {
     });
   }
 
+  function actualizarOrigenFoto() {
+    const esArchivo = document.querySelector('[name="photoInputMode"]:checked').value === "file";
+    document.getElementById("profilePhotoFileField").hidden = !esArchivo;
+    document.getElementById("profilePhotoUrlField").hidden = esArchivo;
+    if (esArchivo) document.getElementById("profilePhotoUrl").value = "";
+    else document.getElementById("profilePhoto").value = "";
+  }
   function wireExpedientes() {
+    document.querySelectorAll('[name="photoInputMode"]').forEach((input) => input.addEventListener("change", actualizarOrigenFoto));
     document.getElementById("btnCloseProfile").addEventListener("click", () => closeModal("modalExpediente"));
     document.getElementById("modalExpediente").addEventListener("click", (event) => { if (event.target.id === "modalExpediente") closeModal("modalExpediente"); });
     document.getElementById("profileEvidenceForm").addEventListener("submit", async (event) => {
@@ -741,6 +765,7 @@ const UI = (() => {
       try {
         await DB.addEvidencia({ fuenteId: fuentePerfilActiva.id, inspeccionId: document.getElementById("profilePhotoInspection").value, file, photoUrl, descripcion: document.getElementById("profilePhotoDescription").value.trim() });
         document.getElementById("profileEvidenceForm").reset();
+        actualizarOrigenFoto();
         status.textContent = "Evidencia guardada.";
         await refrescarDatos();
         await abrirExpediente(fuentePerfilActiva.id);

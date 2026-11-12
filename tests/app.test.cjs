@@ -10,7 +10,7 @@ function app(offline = false, extra = []) {
   const w = dom.window;
   const evaluate = code => vm.runInContext(code, dom.getInternalVMContext());
   let failed = offline, clients = 0, focused;
-  const fuentes = Array.from({ length: 12 }, (_, i) => ({ id: `f${i}`, nombre: `Estación ${i}`, tipo: 'agua', lat: 8.9, lng: -79.5 }));
+  const fuentes = Array.from({ length: 12 }, (_, i) => ({ id: `f${i}`, nombre: i === 0 ? `[DEMO] Estación ${i}` : `Estación ${i}`, tipo: 'agua', lat: 8.9, lng: -79.5 }));
   const limites = [{ matriz: 'agua', parametro: 'DBO5', limite: 50, umbral_aviso: 40, unidad: 'mg/L' }, { matriz: 'suelo', parametro: 'pH', limite: null, unidad: 'pH' }];
   const inspecciones = Array.from({ length: 15 }, (_, i) => ({ id: `i${i}`, fuente_id: 'f0', fecha: new Date(2026, 8, i + 1).toISOString(), matriz: 'agua', parametro: 'DBO5', valor: i + 20, unidad: 'mg/L', estado: 'bueno', cumple: true, inspector: 'Responsable técnico' }));
   w.matchMedia = () => ({ matches: true });
@@ -86,5 +86,24 @@ test('source summary uses the most critical reading of the latest visit', async 
   await a.init;
   const row = a.w.document.querySelector('#tablaResumenFuentes tbody tr');
   assert.match(row.textContent, /Alerta/);
+  a.dom.window.close();
+});
+
+test('source names omit the demo prefix and photo inputs switch exclusively', async () => {
+  const a = app(), d = a.w.document; await a.init;
+  assert.match(d.querySelector('#tablaResumenFuentes tbody tr').textContent, /Estación 0/);
+  assert.doesNotMatch(d.querySelector('#tablaResumenFuentes tbody tr').textContent, /\[DEMO\]/);
+  d.querySelector('[data-open-profile="f0"]').click(); await pause();
+  assert.equal(d.getElementById('profileTitle').textContent, 'Estación 0');
+  assert.match(d.getElementById('profileChartNote').textContent, /ficticia/);
+  const url = d.querySelector('[name="photoInputMode"][value="url"]');
+  url.checked = true; url.dispatchEvent(new a.w.Event('change'));
+  assert.equal(d.getElementById('profilePhotoFileField').hidden, true);
+  assert.equal(d.getElementById('profilePhotoUrlField').hidden, false);
+  d.getElementById('profilePhotoUrl').value = 'https://example.org/photo.jpg';
+  const file = d.querySelector('[name="photoInputMode"][value="file"]');
+  file.checked = true; file.dispatchEvent(new a.w.Event('change'));
+  assert.equal(d.getElementById('profilePhotoUrl').value, '');
+  assert.equal(d.getElementById('profilePhotoUrlField').hidden, true);
   a.dom.window.close();
 });
