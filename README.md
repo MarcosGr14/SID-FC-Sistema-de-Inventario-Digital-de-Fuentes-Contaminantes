@@ -97,4 +97,14 @@ Si aparece **Servicio de datos no disponible**, la navegación sigue operativa. 
 
 Las dependencias Leaflet 1.9.4 y Supabase JS 2.119.0 están incluidas en `assets/vendor`, con sus licencias. El frontend no requiere compilación. Para ejecutar las pruebas de regresión de desarrollo: `npm ci` y `npm test`.
 
-El esquema base está en `sql/schema.sql`; la ampliación de expedientes, tendencias y evidencias está en `sql/actualizacion_expedientes_y_tendencias.sql`. El archivo `sql/datos_prueba.sql` contiene solo datos identificados como simulación, para uso académico.
+El esquema base está en `sql/schema.sql`; la ampliación de expedientes, tendencias y evidencias está en `sql/actualizacion_expedientes_y_tendencias.sql`. La ampliación `sql/criterios_y_archivo.sql` añade intervalos por medición y archivo recuperable, sin retirar registros. El archivo `sql/datos_prueba.sql` contiene solo datos identificados como simulación, para uso académico.
+
+## 📥 Mediciones desde documentos externos
+
+En **Mediciones → Desde un informe**, selecciona un sitio e ingresa el resultado, unidad, fecha de muestreo, responsable y enlace al documento. Para varias lecturas, utiliza la plantilla CSV, revisa la vista previa y guarda el lote. Las fuentes deben estar registradas antes de importar; se omiten duplicados exactos.
+
+El CSV utiliza estas columnas: `fuente,medio,parametro,valor,unidad,fecha,responsable,referencia`. La fecha incluye la zona horaria, por ejemplo `2026-11-12T09:00:00-05:00`. Admite hasta 100 lecturas por archivo.
+
+La guía de muestreo distingue referencias internacionales, criterios del proyecto y objetivos específicos del sitio. Un intervalo propio requiere el documento que lo respalda. Los datos académicos conservan su procedencia en la ficha técnica.
+
+`sql/organizar_inventario.sql` corresponde a la limpieza puntual del 12 de noviembre, no a una migración recurrente. Las fuentes retiradas del inventario se archivan de forma recuperable. `sql/restaurar_fuentes_archivadas.sql` permite restaurarlas desde una sesión administrativa.

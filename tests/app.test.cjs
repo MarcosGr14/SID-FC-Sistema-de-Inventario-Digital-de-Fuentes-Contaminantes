@@ -21,11 +21,11 @@ function app(offline = false, extra = []) {
   w.supabase = { createClient() {
     clients++;
     return { auth: { getSession: async () => ({ data: { session: null } }), signOut: async () => ({ error: null }) },
-      from(table) { const q = { select() { return q; }, order() { return q; }, then(resolve, reject) { return Promise.resolve().then(async () => { await pause(); return failed ? { data: null, error: new Error('Failed to fetch') } : { data: ({ fuentes, limites, inspecciones })[table] || [], error: null }; }).then(resolve, reject); } }; return q; }
+      from(table) { const q = { select() { return q; }, insert(records) { w.__insertPayload=records; w.__insertCalls=(w.__insertCalls||0)+1;return q; }, order() { return q; }, then(resolve, reject) { return Promise.resolve().then(async () => { await pause(); return failed ? { data: null, error: new Error('Failed to fetch') } : { data: ({ fuentes, limites, inspecciones })[table] || [], error: null }; }).then(resolve, reject); } }; return q; }
     };
   } };
   evaluate('const SIDMap = { init(){}, isInitialized:()=>true, invalidateSize(){}, render(){}, focusFuente(id){window.__focused=id;} };');
-  for (const file of ['config', 'db', 'auth', 'inspections', 'export', 'ui']) evaluate(fs.readFileSync(`js/${file}.js`, 'utf8'));
+  for (const file of ['config', 'db', 'auth', 'guide', 'inspections', 'export', 'chart', 'workflows', 'ui']) evaluate(fs.readFileSync(`js/${file}.js`, 'utf8'));
   const init = evaluate('UI.init()');
   return { dom, w, evaluate, init, recover: () => { failed = false; }, clients: () => clients };
 }
@@ -95,7 +95,7 @@ test('source names omit the demo prefix and photo inputs switch exclusively', as
   assert.doesNotMatch(d.querySelector('#tablaResumenFuentes tbody tr').textContent, /\[DEMO\]/);
   d.querySelector('[data-open-profile="f0"]').click(); await pause();
   assert.equal(d.getElementById('profileTitle').textContent, 'Estación 0');
-  assert.match(d.getElementById('profileChartNote').textContent, /ficticia/);
+  assert.match(d.getElementById('profileChartNote').textContent, /académic/);
   const url = d.querySelector('[name="photoInputMode"][value="url"]');
   url.checked = true; url.dispatchEvent(new a.w.Event('change'));
   assert.equal(d.getElementById('profilePhotoFileField').hidden, true);
@@ -105,5 +105,81 @@ test('source names omit the demo prefix and photo inputs switch exclusively', as
   file.checked = true; file.dispatchEvent(new a.w.Event('change'));
   assert.equal(d.getElementById('profilePhotoUrl').value, '');
   assert.equal(d.getElementById('profilePhotoUrlField').hidden, true);
+  a.dom.window.close();
+});
+
+test('source picker filters short options and selects the matching site', async () => {
+  const a=app(),d=a.w.document;await a.init;
+  const picker=d.getElementById('sourcePicker');picker.open=true;picker.dispatchEvent(new a.w.Event('toggle'));
+  const search=d.getElementById('sourceSearch');search.value='Estación 10';search.dispatchEvent(new a.w.Event('input'));
+  const buttons=d.querySelectorAll('#sourceOptions button');assert.equal(buttons.length,1);
+  buttons[0].click();assert.equal(d.getElementById('fFuente').value,'f10');assert.equal(picker.open,false);
+  assert.equal(d.getElementById('sourcePickerLabel').textContent,'Estación 10');
+  a.dom.window.close();
+});
+test('chart points expose and update a readable measurement detail', async () => {
+  const a=app(),d=a.w.document;await a.init;d.querySelector('[data-open-profile="f0"]').click();await pause();
+  const circles=d.querySelectorAll('#profileChart circle');assert.equal(circles.length,15);
+  circles[0].dispatchEvent(new a.w.Event('click',{bubbles:true}));
+  assert.match(d.querySelector('.chart-readout').textContent,/20 mg\/L/);
+  assert.equal(circles[0].getAttribute('aria-pressed'),'true');
+  a.dom.window.close();
+});
+test('CSV parser supports quoted names, separators and validation before insert', async () => {
+  const a=app();await a.init;
+  const parsed=a.evaluate(`SIDWorkflows.parseCSV('fuente;medio;parametro;valor;unidad;fecha;responsable;referencia\\n"Estación; uno";agua;Turbidez;12;NTU;2026-11-12T09:00:00-05:00;Laboratorio;https://example.org/informe')`);
+  assert.equal(parsed[0].fuente,'Estación; uno');
+  a.w.__importRows=[{fuente:'Estación 0',medio:'agua',parametro:'Turbidez',valor:'12',unidad:'NTU',fecha:'2026-11-12T09:00:00-05:00',responsable:'Laboratorio',referencia:'https://example.org/informe'}];
+  const result=a.evaluate('SIDWorkflows.prepareImport(window.__importRows,[{id:"f0",nombre:"Estación 0"}],[])');
+  assert.equal(result.validos.length,1);assert.equal(result.validos[0].origen_dato,'oficial');assert.equal(result.validos[0].fecha,'2026-11-12T14:00:00.000Z');
+  a.w.__existing=result.validos;
+  assert.equal(a.evaluate('SIDWorkflows.prepareImport(window.__importRows,[{id:"f0",nombre:"Estación 0"}],window.__existing).duplicados'),1);
+  a.w.__importRows[0].valor='no-numérico';
+  assert.throws(()=>a.evaluate('SIDWorkflows.prepareImport(window.__importRows,[{id:"f0",nombre:"Estación 0"}],[])'),/numérico/);
+  a.dom.window.close();
+});
+test('dialog arrow keys scroll only its internal surface', async () => {
+  const a=app(),d=a.w.document;await a.init;d.querySelector('[data-open-profile="f0"]').click();await pause();
+  let moved=0;d.querySelector('#modalExpediente .modal').scrollBy=({top})=>{moved+=top;};
+  const event=new a.w.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true});d.getElementById('btnCloseProfile').dispatchEvent(event);
+  assert.equal(event.defaultPrevented,true);assert.equal(moved,48);
+  a.dom.window.close();
+});
+test('guide covers all three media and distinguishes external guidance from project criteria', async () => {
+  const a=app();await a.init;
+  assert.equal(a.evaluate('MeasurementGuide.items.some(i=>i.matriz==="suelo")'),true);
+  assert.equal(a.evaluate('MeasurementGuide.find("aire","PM2.5 (promedio 24 h)").max'),15);
+  assert.equal(a.evaluate('MeasurementGuide.find("agua","Oxígeno disuelto").max'),null);
+  assert.equal(a.evaluate('Inspections.porMatriz("suelo").some(i=>i.parametro==="Materia orgánica")'),true);
+  a.dom.window.close();
+});
+
+test('custom minimum criterion is stored with its supporting document', async () => {
+  const a=app(),d=a.w.document;await a.init;
+  a.evaluate('Auth.user=()=>({id:"inspector"});DB.addInspeccion=async record=>{window.__saved=record;return record;}');
+  d.getElementById('fFuente').value='f0';d.getElementById('fFuente').dispatchEvent(new a.w.Event('change'));
+  d.getElementById('fParametro').value='Oxígeno disuelto';d.getElementById('fParametro').onchange();
+  d.getElementById('fInspector').value='Responsable';d.getElementById('fValor').value='3';d.getElementById('fCriterioMin').value='5';d.getElementById('fCriterioRef').value='https://example.org/criterio';
+  d.getElementById('formInspeccion').dispatchEvent(new a.w.Event('submit',{cancelable:true}));
+  while(d.getElementById('btnGuardarInspeccion').disabled) await pause();
+  assert.equal(a.w.__saved.estado,'alerta');assert.equal(a.w.__saved.criterio_minimo,5);assert.equal(a.w.__saved.criterio_maximo,null);assert.equal(a.w.__saved.unidad,'mg/L');
+  a.dom.window.close();
+});
+test('external batch is sent as one insert with its authenticated author', async () => {
+  const a=app();await a.init;a.evaluate('Auth.user=()=>({id:"inspector"})');
+  await a.evaluate('DB.addInspeccionesExternas([{fuente_id:"f0",valor:10},{fuente_id:"f0",valor:12}])');
+  assert.equal(a.w.__insertCalls,1);assert.equal(a.w.__insertPayload.length,2);assert.ok(a.w.__insertPayload.every(r=>r.creado_por==='inspector'));
+  a.dom.window.close();
+});
+
+test('measurement guard prevents duplicate submits while a write is in progress', async () => {
+  const a=app(),d=a.w.document;await a.init;
+  a.evaluate('Auth.user=()=>({id:"inspector"});window.__writes=0;DB.addInspeccion=async record=>{window.__writes++;await new Promise(resolve=>{window.__resolveWrite=resolve});return record;}');
+  d.getElementById('fFuente').value='f0';d.getElementById('fFuente').dispatchEvent(new a.w.Event('change'));
+  d.getElementById('fInspector').value='Responsable';d.getElementById('fValor').value='20';
+  const form=d.getElementById('formInspeccion');
+  form.dispatchEvent(new a.w.Event('submit',{cancelable:true}));form.dispatchEvent(new a.w.Event('submit',{cancelable:true}));
+  assert.equal(a.w.__writes,1);a.w.__resolveWrite();
+  while(d.getElementById('btnGuardarInspeccion').disabled) await pause();
   a.dom.window.close();
 });

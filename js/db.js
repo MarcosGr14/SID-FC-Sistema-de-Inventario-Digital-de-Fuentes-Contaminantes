@@ -136,6 +136,15 @@ const DB = (() => {
       return nueva;
     },
 
+    async addInspeccionesExternas(registros) {
+      const user = Auth.user();
+      if (!user || !isSupabase()) throw new Error("Inicia sesión con conexión al servicio de datos.");
+      if (!registros.length || registros.length > 100) throw new Error("El lote debe contener entre 1 y 100 registros.");
+      const {data,error} = await client().from("inspecciones").insert(registros.map(i => ({...i,creado_por:user.id}))).select("id");
+      if (error) throw error;
+      return data;
+    },
+
     async getLimites() {
       if (isSupabase()) {
         const { data, error } = await client().from("limites").select("*");

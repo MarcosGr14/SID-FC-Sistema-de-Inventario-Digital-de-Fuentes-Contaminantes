@@ -8,11 +8,13 @@ const Inspections = (() => {
   }
 
   function porMatriz(matriz) {
-    return limites.filter((l) => l.matriz === matriz);
+    const guardados = limites.filter((l) => l.matriz === matriz);
+    const adicionales = typeof MeasurementGuide === "undefined" ? [] : MeasurementGuide.items.filter((g) => g.matriz === matriz && !guardados.some((l) => l.parametro === g.parametro)).map((g) => ({ ...g, limite:null }));
+    return [...guardados, ...adicionales];
   }
 
   function limiteDe(matriz, parametro) {
-    return limites.find((l) => l.matriz === matriz && l.parametro === parametro);
+    return porMatriz(matriz).find((l) => l.parametro === parametro);
   }
 
   

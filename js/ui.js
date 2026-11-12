@@ -91,11 +91,11 @@ const UI = (() => {
     fuentes.forEach((f) => {
       const opt = document.createElement("option");
       opt.value = f.id;
-      opt.textContent = `${f.nombre} · ${titulo(f.tipo)}${f.ubicacion ? ` · ${f.ubicacion}` : ""}`;
+      opt.textContent = `${f.nombre} · ${titulo(f.tipo)}`;
       sel.appendChild(opt);
     });
     ayuda.textContent = fuentes.length
-      ? "Selecciona una fuente ya registrada; cada medición quedará asociada a su ubicación. Si es un punto nuevo, créalo una sola vez y luego podrás reutilizarlo."
+      ? "Cada medición se vincula al sitio seleccionado."
       : "El inventario está vacío. Crea primero una fuente o un punto puntual de evaluación; después quedará disponible aquí para registrar sus mediciones.";
     actualizarDetalleFuente();
   }
@@ -105,15 +105,17 @@ const UI = (() => {
     const fuente = fuentes.find((f) => String(f.id) === String(id));
     const detalles = document.getElementById("fFuenteDetails");
     if (!detalles) return;
+    const pickerLabel = document.getElementById("sourcePickerLabel");
+    if (pickerLabel) pickerLabel.textContent = fuente ? fuente.nombre : "Seleccionar fuente";
     detalles.hidden = !fuente;
     if (!fuente) return;
-    const referencia = fuente.ubicacion?.trim();
+    const referencia = typeof SIDWorkflows === "undefined" ? fuente.ubicacion?.trim() : SIDWorkflows.compact(fuente);
     const coordenadas = `${Number(fuente.lat).toFixed(5)}, ${Number(fuente.lng).toFixed(5)}`;
     document.getElementById("fFuenteLugar").textContent = `${referencia ? `${referencia} · ` : "Ubicación"}${coordenadas}`;
   }
 
   function titulo(value) {
-    return ({ agua: "Agua", aire: "Aire", suelo: "Suelo", sin_datos: "Sin datos", bueno: "Bajo criterio", intermedio: "Preventivo", alerta: "Alerta", sin_referencia: "Sin referencia", campo: "Campo", laboratorio: "Laboratorio", oficial: "Oficial", simulacion: "Simulación" })[value] || String(value || "—").replaceAll("_", " ");
+    return ({ agua: "Agua", aire: "Aire", suelo: "Suelo", sin_datos: "Sin datos", bueno: "Bajo criterio", intermedio: "Preventivo", alerta: "Alerta", sin_referencia: "Sin referencia", campo: "Campo", laboratorio: "Laboratorio", oficial: "Oficial", punto_muestreo:"Punto de monitoreo",residuos_solidos:"Residuos sólidos",erosion_suelo:"Erosión y sedimentos",extraccion_materiales:"Extracción de materiales",emision_atmosferica:"Emisión atmosférica",descarga_agua:"Descarga de agua",simulacion: "Académico" })[value] || String(value || "—").replaceAll("_", " ");
   }
   function estadoDe(i) { return i.estado || (i.cumple ? "bueno" : "alerta"); }
   function pillEstado(estado) {
@@ -131,22 +133,36 @@ const UI = (() => {
     opciones.forEach((l) => {
       const opt = document.createElement("option");
       opt.value = l.parametro;
-      opt.textContent = `${l.parametro}${l.limite == null ? " (sin referencia cargada)" : ` (criterio ${l.limite} ${l.unidad})`}`;
+      opt.textContent = `${l.parametro} · ${l.unidad}`;
       paramSel.appendChild(opt);
     });
     unidadSpan.textContent = opciones[0]?.unidad || "";
     paramSel.onchange = () => {
       const lim = Inspections.limiteDe(matriz, paramSel.value);
       unidadSpan.textContent = lim?.unidad || "";
+      mostrarGuiaParametro();
     };
+    mostrarGuiaParametro();
   }
 
+  function mostrarGuiaParametro() {
+    const node = document.getElementById("measurementHint");
+    if (!node || typeof MeasurementGuide === "undefined") return;
+    const item = MeasurementGuide.find(document.getElementById("fMatriz").value,document.getElementById("fParametro").value);
+    node.innerHTML = item ? `<strong>${escapeHTML(MeasurementGuide.range(item))}</strong><span>${escapeHTML(item.contexto)}</span><p>${escapeHTML(item.nota)}</p>` : '<p>Criterio específico del proyecto. Verifica la norma, el medio y la unidad antes de clasificar el resultado.</p>';
+  }
   function ajustarMatrizFuente() {
     const fuente = fuentes.find((f) => String(f.id) === document.getElementById("fFuente").value);
     const matrizSel = document.getElementById("fMatriz");
     [...matrizSel.options].forEach((option) => { option.disabled = false; });
     if (fuente) matrizSel.value = fuente.tipo;
     poblarParametros();
+    if(fuente){
+      const recientes=inspecciones.filter(i=>i.fuente_id===fuente.id&&i.matriz===fuente.tipo).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+      const elegido=recientes[0]?.parametro || ({agua:"pH",aire:"PM2.5 (promedio 24 h)",suelo:"pH"})[fuente.tipo];
+      const parametro=document.getElementById("fParametro");
+      if([...parametro.options].some(o=>o.value===elegido)){parametro.value=elegido;parametro.onchange?.();}
+    }
     actualizarDetalleFuente();
   }
   function renderHistorico(filtroTexto = "") {
@@ -191,7 +207,7 @@ const UI = (() => {
         <td>${escapeHTML(i.parametro)}</td>
         <td>${escapeHTML(i.valor)} ${escapeHTML(i.unidad || "")}</td>
         <td>${pillEstado(estadoDe(i))}</td>
-        <td>${escapeHTML(i.inspector)}</td>
+        <td>${escapeHTML((i.inspector||"").replace(/\s*\(DEMO\)/gi,""))}</td>
         <td>${titulo(i.origen_dato || "campo")}</td>
       </tr>`
         )
@@ -289,31 +305,29 @@ const UI = (() => {
       if (button) abrirExpediente(button.dataset.openProfile);
     };
   }
-  function dibujarGrafico(rows) {
-    const holder = document.getElementById("profileChart");
-    holder.replaceChildren();
-    const values = rows.map((r) => Number(r.valor)).filter(Number.isFinite);
-    if (values.length < 1) { holder.textContent = "No hay mediciones para este parámetro."; return; }
-    const width = 760, height = 250, pad = 42;
-    const min = Math.min(0, ...values), max = Math.max(...values);
-    const span = max - min || 1;
-    const points = rows.map((r, index) => ({ r, x: pad + (rows.length === 1 ? (width - pad * 2) / 2 : index * (width - pad * 2) / (rows.length - 1)), y: height - pad - ((Number(r.valor) - min) / span) * (height - pad * 2) }));
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", `0 0 ${width} ${height}`); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "Tendencia histórica de mediciones");
-    const axis = document.createElementNS(svg.namespaceURI, "path"); axis.setAttribute("d", `M${pad} ${pad} V${height-pad} H${width-pad}`); axis.setAttribute("class", "chart-axis"); svg.append(axis);
-    const poly = document.createElementNS(svg.namespaceURI, "polyline"); poly.setAttribute("points", points.map((p) => `${p.x},${p.y}`).join(" ")); poly.setAttribute("class", "chart-line"); svg.append(poly);
-    points.forEach((p) => { const c = document.createElementNS(svg.namespaceURI, "circle"); c.setAttribute("cx", p.x); c.setAttribute("cy", p.y); c.setAttribute("r", "5"); c.setAttribute("class", "chart-point"); const titleEl = document.createElementNS(svg.namespaceURI, "title"); titleEl.textContent = `${fmtFecha(p.r.fecha)}: ${p.r.valor} ${p.r.unidad || ""}`; c.append(titleEl); svg.append(c); });
-    holder.append(svg);
+  function fichaTecnica(r) {
+    const criterio = r.criterio_minimo != null || r.criterio_maximo != null;
+    if (!r.observaciones && !criterio) return "—";
+    const intervalo = criterio ? `<p>Criterio aplicado: ${r.criterio_minimo == null ? "sin mínimo" : escapeHTML(r.criterio_minimo)} – ${r.criterio_maximo == null ? "sin máximo" : escapeHTML(r.criterio_maximo)} ${escapeHTML(r.unidad || "")}</p><p>${escapeHTML(r.referencia_criterio || "")}</p>` : "";
+    return `<details class="technical-details"><summary>Ficha técnica</summary>${intervalo}${r.observaciones ? `<p>${escapeHTML(r.observaciones)}</p>` : ""}</details>`;
   }
+  function dibujarGrafico(rows) {
+    SIDChart.render(document.getElementById("profileChart"),rows);
+  }
+
   async function abrirExpediente(id) {
     const fuente = fuentes.find((f) => String(f.id) === String(id));
     if (!fuente) return;
+    const perfilAbierto=!document.getElementById("modalExpediente").hidden;
+    const parametroPrevio=String(fuentePerfilActiva?.id)===String(id)?document.getElementById("profileParameter").value:null;
+    const scrollPrevio=document.querySelector("#modalExpediente .modal").scrollTop;
     if (String(fuentePerfilActiva?.id) !== String(fuente.id)) paginaHistorialPerfil = 1;
     fuentePerfilActiva = fuente;
     const rows = inspecciones.filter((i) => String(i.fuente_id) === String(id)).sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
     paginaHistorialPerfil = Math.min(paginaHistorialPerfil, Math.max(1, Math.ceil(rows.length / HISTORIAL_PERFIL_POR_PAGINA)));
     document.getElementById("profileTitle").textContent = fuente.nombre;
     document.getElementById("profileLocation").textContent = `${titulo(fuente.tipo)} · ${fuente.ubicacion || "Sin referencia del sitio"} · ${Number(fuente.lat).toFixed(5)}, ${Number(fuente.lng).toFixed(5)}`;
+    document.getElementById("profileLocationQuality").textContent=fuente.esDemostracion?"Coordenada de referencia · confirmar en campo":"Coordenada registrada · WGS 84";
     const metricas = document.getElementById("profileMetrics");
     const ultima = rows.at(-1);
     const estadoVisita = fuentesConEstado().find((f) => f.id === fuente.id)?.estado;
@@ -321,6 +335,7 @@ const UI = (() => {
     const params = [...new Map(rows.map((r) => [`${r.matriz}|${r.parametro}|${r.unidad || ""}`, r])).entries()];
     const select = document.getElementById("profileParameter");
     select.innerHTML = params.map(([key, r]) => `<option value="${escapeHTML(key)}">${escapeHTML(titulo(r.matriz))} · ${escapeHTML(r.parametro)} (${escapeHTML(r.unidad || "")})</option>`).join("");
+    if(parametroPrevio&&params.some(([key])=>key===parametroPrevio))select.value=parametroPrevio;
     const updateGraph = () => {
       const [matriz, parametro, unidad] = (select.value || "").split("|");
       const same = rows.filter((r) => r.matriz === matriz && r.parametro === parametro && (r.unidad || "") === unidad);
@@ -328,16 +343,17 @@ const UI = (() => {
       const first = same[0], last = same.at(-1);
       const trend = document.getElementById("profileTrend");
       if (!first || !last || first === last) trend.textContent = "Se requieren al menos dos mediciones comparables para observar una tendencia.";
+      else if (["metodo_muestreo","criterio_minimo","criterio_maximo","referencia_criterio"].some(k=>(first[k]??null)!==(last[k]??null))) trend.textContent="El método o criterio cambió entre lecturas. Revisa su comparabilidad antes de interpretar la evolución.";
       else if (estadoDe(first) === "sin_referencia" || estadoDe(last) === "sin_referencia") trend.textContent = `Variación de ${first.valor} a ${last.valor} ${unidad}. Sin criterio normativo vigente; la variación no determina mejora ni cumplimiento.`;
       else {
         const a = { alerta: 3, intermedio: 2, bueno: 1 }[estadoDe(first)], b = { alerta: 3, intermedio: 2, bueno: 1 }[estadoDe(last)];
         trend.textContent = b < a ? "Mejora según el criterio configurado." : b > a ? "Empeora según el criterio configurado." : "Se mantiene en el mismo rango del criterio configurado.";
       }
-      document.getElementById("profileChartNote").textContent = `Comparación solo de ${parametro || "parámetros"} con unidad ${unidad || ""}. El umbral preventivo de SID-FC no equivale a una norma.${fuente.esDemostracion ? " Clasificación DEMO ficticia: consulta sus umbrales en las observaciones de cada medición." : ""}`;
+      document.getElementById("profileChartNote").textContent = fuente.esDemostracion ? "Evaluación académica · criterios documentados en la ficha técnica." : "Las lecturas se comparan por parámetro y unidad; confirma el método y el criterio aplicable.";
     };
     select.onchange = updateGraph; updateGraph();
     const lecturasPerfil = [...rows].reverse();
-    document.querySelector("#profileHistory tbody").innerHTML = lecturasPerfil.slice((paginaHistorialPerfil - 1) * HISTORIAL_PERFIL_POR_PAGINA, paginaHistorialPerfil * HISTORIAL_PERFIL_POR_PAGINA).map((r) => `<tr><td>${fmtFecha(r.fecha)}</td><td>${escapeHTML(titulo(r.matriz))} · ${escapeHTML(r.parametro)}</td><td>${escapeHTML(r.valor)} ${escapeHTML(r.unidad || "")}</td><td>${pillEstado(estadoDe(r))}</td><td>${escapeHTML(titulo(r.origen_dato || "campo"))}${r.referencia_dato ? `<br><small>${escapeHTML(r.referencia_dato)}</small>` : ""}${r.metodo_muestreo ? `<br><small>${escapeHTML(r.metodo_muestreo)}</small>` : ""}</td><td>${escapeHTML(r.observaciones || "—")}</td></tr>`).join("") || '<tr><td colspan="6" class="table-empty">Aún no hay mediciones para esta fuente.</td></tr>';
+    document.querySelector("#profileHistory tbody").innerHTML = lecturasPerfil.slice((paginaHistorialPerfil - 1) * HISTORIAL_PERFIL_POR_PAGINA, paginaHistorialPerfil * HISTORIAL_PERFIL_POR_PAGINA).map((r) => `<tr><td>${fmtFecha(r.fecha)}</td><td>${escapeHTML(titulo(r.matriz))} · ${escapeHTML(r.parametro)}</td><td>${escapeHTML(r.valor)} ${escapeHTML(r.unidad || "")}</td><td>${pillEstado(estadoDe(r))}</td><td>${escapeHTML(titulo(r.origen_dato || "campo"))}${r.referencia_dato || r.metodo_muestreo ? `<details class="technical-details"><summary>Ver procedencia</summary><p>${escapeHTML(r.referencia_dato || "")}</p><p>${escapeHTML(r.metodo_muestreo || "")}</p></details>` : ""}</td><td>${fichaTecnica(r)}</td></tr>`).join("") || '<tr><td colspan="6" class="table-empty">Aún no hay mediciones para esta fuente.</td></tr>';
     renderPaginacionLista("paginacionProfileHistory", lecturasPerfil.length, HISTORIAL_PERFIL_POR_PAGINA, paginaHistorialPerfil, (pagina) => { paginaHistorialPerfil = pagina; abrirExpediente(fuente.id); });
     const inspectionSelect = document.getElementById("profilePhotoInspection");
     inspectionSelect.innerHTML = '<option value="">Evidencia general de la fuente</option>' + [...rows].reverse().map((r) => `<option value="${escapeHTML(r.id)}">${escapeHTML(fmtFecha(r.fecha))} · ${escapeHTML(r.parametro)}</option>`).join("");
@@ -367,10 +383,11 @@ const UI = (() => {
       } catch (error) { document.getElementById("profileEvidenceNotice").textContent = `No se pudieron cargar evidencias: ${error.message}`; }
     }
     openModal("modalExpediente");
+    if(perfilAbierto) document.querySelector("#modalExpediente .modal").scrollTop=scrollPrevio;
   }
   async function refrescarDatos() {
     [fuentes, inspecciones] = await Promise.all([DB.getFuentes(), DB.getInspecciones()]);
-    fuentes = fuentes.map((f) => ({ ...f, esDemostracion: /^\[DEMO\]\s*/i.test(f.nombre), nombre: f.nombre.replace(/^\[DEMO\]\s*/i, "") }));
+    fuentes = fuentes.map((f) => ({ ...f, esDemostracion: /^\[DEMO\]\s*/i.test(f.nombre), ubicacion_original:f.ubicacion, ubicacion: typeof SIDWorkflows === "undefined" ? f.ubicacion : SIDWorkflows.compact(f), nombre: f.nombre.replace(/^\[DEMO\]\s*/i, "") }));
     if (Auth.user() && DB.hasEvidenceStorage()) {
       let fotos = {};
       try { fotos = await DB.getEvidenciasMapa(fuentes.map((f) => f.id)); } catch {}
@@ -439,6 +456,7 @@ const UI = (() => {
   }
   function openModal(id, { preserveForm = false } = {}) {
     const backdrop = document.getElementById(id);
+    backdrop._justOpened = backdrop.hidden;
     if (backdrop.hidden) backdrop._returnFocus = document.activeElement;
     backdrop.hidden = false;
     document.body.classList.add("has-modal-open");
@@ -448,12 +466,13 @@ const UI = (() => {
     } else if (id === "modalLogin") {
       document.getElementById("loginError").hidden = true;
     }
-    backdrop.querySelector("input, select, textarea, button")?.focus();
+    if (backdrop._justOpened !== false) backdrop.querySelector("input, select, textarea, button")?.focus({preventScroll:true});
+    backdrop._justOpened = false;
   }
   function closeModal(id) {
     const backdrop = document.getElementById(id);
     backdrop.hidden = true;
-    backdrop._returnFocus?.focus();
+    backdrop._returnFocus?.focus({preventScroll:true});
     if (![...document.querySelectorAll(".modal-backdrop")].some((modal) => !modal.hidden)) {
       document.body.classList.remove("has-modal-open");
     }
@@ -584,8 +603,10 @@ const UI = (() => {
       if (event.target.id === "modalFuente") cerrarFuenteModal();
     });
 
+    let guardandoFuente = false;
     document.getElementById("formFuente").addEventListener("submit", async (e) => {
       e.preventDefault();
+      if (guardandoFuente) return;
       const errorEl = document.getElementById("fuenteError");
       errorEl.hidden = true;
       const nombre = document.getElementById("nfNombre").value.trim();
@@ -599,11 +620,15 @@ const UI = (() => {
         errorEl.hidden = false;
         return;
       }
+      const submit = e.target.querySelector('[type="submit"]');
+      guardandoFuente = true;
+      submit.disabled = true;
       try {
         const nuevaFuente = await DB.addFuente({ nombre, tipo, categoria_fuente, ubicacion, lat, lng });
         const volverAInspeccion = regresarAInspeccionDespuesDeFuente;
         cerrarFuenteModal();
-        await refrescarDatos();
+        try { await refrescarDatos(); }
+        catch { toast("Fuente guardada. Recarga el inventario para consultarla."); return; }
         if (volverAInspeccion) {
           document.getElementById("fFuente").value = String(nuevaFuente.id);
           ajustarMatrizFuente();
@@ -614,6 +639,9 @@ const UI = (() => {
       } catch (err) {
         errorEl.textContent = "No se pudo guardar: " + err.message;
         errorEl.hidden = false;
+      } finally {
+        guardandoFuente = false;
+        submit.disabled = false;
       }
     });
   }
@@ -621,7 +649,7 @@ const UI = (() => {
   function wireInspeccionForm() {
     document.getElementById("btnRegistrarInspeccion").addEventListener("click", () => {
       document.querySelector('.tab[data-tab="inspeccion"]').click();
-      document.getElementById("fFuente").focus();
+      document.querySelector("#sourcePicker summary")?.focus();
     });
 
     document.getElementById("fFuente").addEventListener("change", ajustarMatrizFuente);
@@ -630,9 +658,12 @@ const UI = (() => {
     document.getElementById("fFuente").title = "Selecciona un punto ya registrado o crea uno nuevo";
     document.getElementById("fFecha").value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     document.getElementById("fMatriz").addEventListener("change", poblarParametros);
+    document.getElementById("fOrigenDato").addEventListener("change",()=>{document.getElementById("fReferenciaDato").required=document.getElementById("fOrigenDato").value==="oficial";});
 
+    let guardandoMedicion = false;
     document.getElementById("formInspeccion").addEventListener("submit", async (e) => {
       e.preventDefault();
+      if (guardandoMedicion) return;
       const fuente_id = document.getElementById("fFuente").value;
       const inspector = document.getElementById("fInspector").value.trim();
       const matriz = document.getElementById("fMatriz").value;
@@ -644,11 +675,12 @@ const UI = (() => {
       const metodo_muestreo = document.getElementById("fMetodo").value.trim();
       const referencia_dato = document.getElementById("fReferenciaDato").value.trim();
 
-      if (!fuente_id || !inspector || !Number.isFinite(valor) || valor < 0 || !parametro || !fecha) {
+      if (!fuente_id || !inspector || !Number.isFinite(valor) || !parametro || !fecha) {
         toast("Completa todos los campos obligatorios.", true);
         return;
       }
 
+      if(valor<0 && Inspections.limiteDe(matriz,parametro)?.unidad!=="°C"){toast("Una concentración no puede ser negativa.",true);return;}
       const fuente = fuentes.find((f) => String(f.id) === fuente_id);
       if (!fuente) {
         toast("Selecciona una fuente válida.", true);
@@ -659,22 +691,35 @@ const UI = (() => {
         document.getElementById("fReferenciaDato").focus();
         return;
       }
+      const minimoRaw=document.getElementById("fCriterioMin").value, maximoRaw=document.getElementById("fCriterioMax").value;
+      const criterio_minimo=minimoRaw===""?null:Number(minimoRaw), criterio_maximo=maximoRaw===""?null:Number(maximoRaw);
+      const referencia_criterio=document.getElementById("fCriterioRef").value.trim();
+      if(criterio_minimo!=null&&criterio_maximo!=null&&criterio_minimo>criterio_maximo){toast("El mínimo debe ser menor o igual al máximo.",true);return;}
+      if((criterio_minimo!=null||criterio_maximo!=null)&&!/^https:\/\//.test(referencia_criterio)){toast("Agrega el documento HTTPS que respalda el intervalo.",true);return;}
+      if(origen_dato==="oficial"&&!/^https:\/\//.test(referencia_dato)){toast("El informe externo necesita un enlace HTTPS verificable.",true);return;}
       const evalRes = Inspections.evaluar(matriz, parametro, valor, fecha);
+      if(criterio_minimo!=null||criterio_maximo!=null){evalRes.estado=((criterio_minimo!=null&&valor<criterio_minimo)||(criterio_maximo!=null&&valor>criterio_maximo))?"alerta":"bueno";evalRes.cumple=evalRes.estado!=="alerta";}
+      else if(origen_dato==="oficial"||MeasurementGuide.find(matriz,parametro)){evalRes.estado="sin_referencia";evalRes.cumple=true;}
       const registro = {
         fuente_id, inspector, matriz, parametro, valor, fecha: new Date(fecha).toISOString(),
         observaciones, unidad: evalRes.unidad, cumple: evalRes.cumple, estado: evalRes.estado,
-        origen_dato, metodo_muestreo, referencia_dato,
+        origen_dato, metodo_muestreo, referencia_dato, criterio_minimo, criterio_maximo, referencia_criterio,
       };
 
+      const submit = document.getElementById("btnGuardarInspeccion");
+      guardandoMedicion = true;
+      submit.disabled = true;
       try {
         await DB.addInspeccion(registro);
         e.target.reset();
+        document.getElementById("fReferenciaDato").required=false;
         document.getElementById("fFecha").value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
         ajustarMatrizFuente();
-        await refrescarDatos();
+        try { await refrescarDatos(); }
+        catch { toast("Medición guardada. Recarga el inventario para consultar el resultado."); return; }
         toast(
           evalRes.estado === "alerta"
-            ? `⚠️ Lectura sobre el criterio configurado (${evalRes.limite} ${evalRes.unidad}).`
+            ? "Resultado fuera del criterio de evaluación documentado."
             : evalRes.estado === "intermedio"
               ? "Medición guardada en rango preventivo SID-FC."
               : evalRes.estado === "sin_referencia"
@@ -684,6 +729,9 @@ const UI = (() => {
         );
       } catch (err) {
         toast("No se pudo guardar la medición: " + err.message, true);
+      } finally {
+        guardandoMedicion = false;
+        submit.disabled = !Auth.user() || !datosDisponibles;
       }
     });
   }
@@ -890,7 +938,7 @@ const UI = (() => {
       try { SIDExport.reportePDF(html); } catch (error) { toast(error.message, true); }
     };
     const generarHistorico = () => {
-      const filas = paginaHistorialFiltrada.map((i) => `<tr><td>${escapeHTML(fmtFecha(i.fecha))}</td><td>${escapeHTML(fuentes.find((f) => String(f.id) === String(i.fuente_id))?.nombre || i.fuente_id)}</td><td>${escapeHTML(titulo(i.matriz))}</td><td>${escapeHTML(i.parametro)}</td><td>${escapeHTML(i.valor)} ${escapeHTML(i.unidad || "")}</td><td>${escapeHTML(titulo(estadoDe(i)))}</td><td>${escapeHTML(i.inspector)}</td><td>${escapeHTML(titulo(i.origen_dato || "campo"))}</td></tr>`).join("");
+      const filas = paginaHistorialFiltrada.map((i) => `<tr><td>${escapeHTML(fmtFecha(i.fecha))}</td><td>${escapeHTML(fuentes.find((f) => String(f.id) === String(i.fuente_id))?.nombre || i.fuente_id)}</td><td>${escapeHTML(titulo(i.matriz))}</td><td>${escapeHTML(i.parametro)}</td><td>${escapeHTML(i.valor)} ${escapeHTML(i.unidad || "")}</td><td>${escapeHTML(titulo(estadoDe(i)))}</td><td>${escapeHTML((i.inspector||"").replace(/\s*\(DEMO\)/gi,""))}</td><td>${escapeHTML(titulo(i.origen_dato || "campo"))}</td></tr>`).join("");
       try { SIDExport.reportePDF(`<h2>Historial completo de mediciones filtrado</h2><p>${paginaHistorialFiltrada.length} registros. Reporte incluye todas las visitas coincidentes.</p><table><thead><tr><th>Fecha</th><th>Fuente</th><th>Medio</th><th>Parámetro</th><th>Valor</th><th>Estado</th><th>Registrado por</th><th>Origen</th></tr></thead><tbody>${filas}</tbody></table><p style="margin-top:2rem;font-size:.8rem;color:#666">Los estados reflejan criterios configurados en SID-FC y no determinan por sí solos incumplimiento legal.</p>`); } catch (error) { toast(error.message, true); }
     };
     document.getElementById("btnReporte").addEventListener("click", generarResumen);
@@ -913,10 +961,19 @@ const UI = (() => {
     wireFuenteModal();
     wireInspeccionForm();
     wireExpedientes();
+    if (typeof SIDWorkflows !== "undefined") SIDWorkflows.init({getFuentes:()=>fuentes,getInspecciones:()=>inspecciones,refresh:refrescarDatos});
+    document.getElementById("btnFitMap").addEventListener("click",()=>SIDMap.fitVisible?.());
     document.addEventListener("keydown", (event) => {
+      const open = [...document.querySelectorAll(".modal-backdrop")].find(el=>!el.hidden);
+      if (open && !event.target.closest?.("input,select,textarea,[contenteditable=true],summary")) {
+        const surface=open.querySelector(".modal");
+        const keys={ArrowDown:48,ArrowUp:-48,PageDown:surface?.clientHeight*0.8,PageUp:-surface?.clientHeight*0.8};
+        if(event.key in keys){event.preventDefault();surface.scrollBy?.({top:keys[event.key],behavior:"auto"});}
+        if(event.key==="Home"||event.key==="End"){event.preventDefault();surface.scrollTo?.({top:event.key==="Home"?0:surface.scrollHeight,behavior:"auto"});}
+      }
       if (event.key === "Tab") {
         const modal = [...document.querySelectorAll(".modal-backdrop")].find((el) => !el.hidden);
-        const focusable = modal && [...modal.querySelectorAll("button, input, select, textarea, a[href]")].filter((el) => !el.disabled && el.getClientRects().length);
+        const focusable = modal && [...modal.querySelectorAll("button, input, select, textarea, a[href],summary,[tabindex=\"0\"]")].filter((el) => !el.disabled && el.getClientRects().length);
         if (focusable?.length) {
           const first = focusable[0], last = focusable.at(-1);
           if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }

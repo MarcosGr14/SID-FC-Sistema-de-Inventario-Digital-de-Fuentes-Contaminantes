@@ -36,7 +36,7 @@ const SIDExport = (() => {
     const [fuentes, inspecciones] = await Promise.all([DB.getFuentes(), DB.getInspecciones()]);
     const fuentesById = Object.fromEntries(fuentes.map((f) => [f.id, f]));
 
-    const header = ["Fecha", "Fuente", "Categoría de fuente", "Ubicación", "Latitud", "Longitud", "Medio", "Parámetro", "Valor", "Unidad", "Estado SID-FC", "Origen del dato", "Método", "Procedencia", "Inspector", "Observaciones"];
+    const header = ["Fecha", "Fuente", "Categoría de fuente", "Ubicación", "Latitud", "Longitud", "Medio", "Parámetro", "Valor", "Unidad", "Estado SID-FC", "Origen del dato", "Método", "Procedencia", "Inspector", "Observaciones", "Criterio mínimo", "Criterio máximo", "Documento del criterio"];
     const rows = inspecciones.map((i) => [
       i.fecha,
       fuentesById[i.fuente_id]?.nombre.replace(/^\[DEMO\]\s*/i, "") || i.fuente_id,
@@ -54,6 +54,9 @@ const SIDExport = (() => {
       i.referencia_dato || "",
       i.inspector,
       (i.observaciones || "").replace(/[\r\n]/g, " "),
+      i.criterio_minimo ?? "",
+      i.criterio_maximo ?? "",
+      i.referencia_criterio || "",
     ]);
 
     const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v ?? "").replace(/^[=+@-]/, "\'$&").replace(/"/g, '""')}"`).join(",")).join("\n");
