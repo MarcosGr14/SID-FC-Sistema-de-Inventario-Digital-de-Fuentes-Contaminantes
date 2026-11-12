@@ -56,7 +56,9 @@ const UI = (() => {
         .filter((i) => i.fuente_id === f.id)
         .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
       const ultima = propias[0];
-      const estado = ultima ? (ultima.estado || (ultima.cumple ? "bueno" : "alerta")) : "sin_datos";
+      const visita = ultima ? propias.filter((i) => new Date(i.fecha).getTime() === new Date(ultima.fecha).getTime()) : [];
+      const prioridad = { alerta: 4, intermedio: 3, sin_referencia: 2, bueno: 1 };
+      const estado = visita.length ? visita.map(estadoDe).sort((a, b) => (prioridad[b] || 0) - (prioridad[a] || 0))[0] : "sin_datos";
       return { ...f, estado, ultimaMedicion: ultima ? fmtFecha(ultima.fecha) : null };
     });
   }
@@ -314,7 +316,8 @@ const UI = (() => {
     document.getElementById("profileLocation").textContent = `${titulo(fuente.tipo)} · ${fuente.ubicacion || "Sin referencia del sitio"} · ${Number(fuente.lat).toFixed(5)}, ${Number(fuente.lng).toFixed(5)}`;
     const metricas = document.getElementById("profileMetrics");
     const ultima = rows.at(-1);
-    metricas.innerHTML = `<div><small>Categoría</small><strong>${escapeHTML(titulo(fuente.categoria_fuente || "otro"))}</strong></div><div><small>Mediciones</small><strong>${rows.length}</strong></div><div><small>Última lectura</small><strong>${ultima ? `${escapeHTML(ultima.valor)} ${escapeHTML(ultima.unidad || "")}` : "Sin datos"}</strong></div><div><small>Estado actual</small>${ultima ? pillEstado(estadoDe(ultima)) : pillEstado("sin_referencia")}</div>`;
+    const estadoVisita = fuentesConEstado().find((f) => f.id === fuente.id)?.estado;
+    metricas.innerHTML = `<div><small>Categoría</small><strong>${escapeHTML(titulo(fuente.categoria_fuente || "otro"))}</strong></div><div><small>Mediciones</small><strong>${rows.length}</strong></div><div><small>Última lectura</small><strong>${ultima ? `${escapeHTML(ultima.valor)} ${escapeHTML(ultima.unidad || "")}` : "Sin datos"}</strong></div><div><small>Estado actual</small>${ultima ? pillEstado(estadoVisita) : pillEstado("sin_referencia")}</div>`;
     const params = [...new Map(rows.map((r) => [`${r.matriz}|${r.parametro}|${r.unidad || ""}`, r])).entries()];
     const select = document.getElementById("profileParameter");
     select.innerHTML = params.map(([key, r]) => `<option value="${escapeHTML(key)}">${escapeHTML(titulo(r.matriz))} · ${escapeHTML(r.parametro)} (${escapeHTML(r.unidad || "")})</option>`).join("");
@@ -330,7 +333,7 @@ const UI = (() => {
         const a = { alerta: 3, intermedio: 2, bueno: 1 }[estadoDe(first)], b = { alerta: 3, intermedio: 2, bueno: 1 }[estadoDe(last)];
         trend.textContent = b < a ? "Mejora según el criterio configurado." : b > a ? "Empeora según el criterio configurado." : "Se mantiene en el mismo rango del criterio configurado.";
       }
-      document.getElementById("profileChartNote").textContent = `Comparación solo de ${parametro || "parámetros"} con unidad ${unidad || ""}. El umbral preventivo de SID-FC no equivale a una norma.`;
+      document.getElementById("profileChartNote").textContent = `Comparación solo de ${parametro || "parámetros"} con unidad ${unidad || ""}. El umbral preventivo de SID-FC no equivale a una norma.${fuente.nombre.startsWith("[DEMO]") ? " Clasificación DEMO ficticia: consulta sus umbrales en las observaciones de cada medición." : ""}`;
     };
     select.onchange = updateGraph; updateGraph();
     const lecturasPerfil = [...rows].reverse();

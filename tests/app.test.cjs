@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const { JSDOM } = require('jsdom');
 const html = fs.readFileSync('index.html', 'utf8');
 const pause = () => new Promise(resolve => setTimeout(resolve, 30));
-function app(offline = false) {
+function app(offline = false, extra = []) {
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only', pretendToBeVisual: true });
   const w = dom.window;
   const evaluate = code => vm.runInContext(code, dom.getInternalVMContext());
@@ -14,6 +14,7 @@ function app(offline = false) {
   const limites = [{ matriz: 'agua', parametro: 'DBO5', limite: 50, umbral_aviso: 40, unidad: 'mg/L' }, { matriz: 'suelo', parametro: 'pH', limite: null, unidad: 'pH' }];
   const inspecciones = Array.from({ length: 15 }, (_, i) => ({ id: `i${i}`, fuente_id: 'f0', fecha: new Date(2026, 8, i + 1).toISOString(), matriz: 'agua', parametro: 'DBO5', valor: i + 20, unidad: 'mg/L', estado: 'bueno', cumple: true, inspector: 'Responsable técnico' }));
   w.matchMedia = () => ({ matches: true });
+  inspecciones.push(...extra);
   w.scrollTo = () => {};
   w.HTMLElement.prototype.scrollIntoView = () => {};
   w.console.error = () => {};
@@ -77,5 +78,13 @@ test('contact validation recovers after correcting a full name without sending a
   name.value = 'Marcos Gaitan';
   name.dispatchEvent(new a.w.Event('input', { bubbles: true }));
   assert.equal(name.validity.customError, false);
+  a.dom.window.close();
+});
+
+test('source summary uses the most critical reading of the latest visit', async () => {
+  const a = app(false, [{ id: 'tie', fuente_id: 'f0', fecha: new Date(2026,8,15).toISOString(), matriz: 'agua', parametro: 'DQO', valor: 200, unidad: 'mg/L', estado: 'alerta', cumple: false, inspector: 'Responsable técnico' }]);
+  await a.init;
+  const row = a.w.document.querySelector('#tablaResumenFuentes tbody tr');
+  assert.match(row.textContent, /Alerta/);
   a.dom.window.close();
 });
