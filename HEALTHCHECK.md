@@ -64,3 +64,13 @@ La API pública de Supabase devolvió 8 fuentes, 96 mediciones y 16 criterios. T
 La suite incluye 28 pruebas: conexión fallida y recuperación, historial de 1.115 mediciones, cargas lentas, resultados fuera de orden, cierre durante cargas y subidas, cambios de sesión, galería parcial, importación CSV, descarga interrumpida, contacto y actualización de fotos con Leaflet real en DOM. Las pruebas de red fallida usan respuestas controladas y no envían datos a terceros.
 
 La inspección visual interactiva de esta revisión y las pruebas físicas en móvil/tableta quedan pendientes. Las comprobaciones HTTP no equivalen a una sesión autenticada completa en el sitio publicado.
+
+## Distribución del inventario · 13 de noviembre de 2026
+
+Los criterios están debajo del mapa, separados de las pestañas Registrar medición, Historial y Fuentes. La consulta muestra un parámetro por medio y distingue el criterio configurado de la referencia técnica, con método y alcance desplegables. La guía sigue disponible si falla la consulta a los criterios del servidor.
+
+Historial y Fuentes permiten ampliar la tabla y volver a la vista dividida sin perder paginación ni filtros. Registrar una medición o seguir un enlace al mapa restaura la vista dividida. En anchos inferiores a 980 px, el orden es mapa, área de trabajo y criterios plegados.
+
+Se comprobaron 1280 px en escritorio, 820 px en tableta y 390 px en móvil mediante tamaños de navegador emulados. No se observó desbordamiento horizontal del documento en móvil/tableta; las tablas mantienen su desplazamiento interno. Se verificaron consulta de parámetros, apertura de notas y ampliación/restauración de tablas en navegador. No se probó un dispositivo físico.
+
+Las 31 pruebas pasan. El arranque de las pruebas usa los scripts y el orden definidos en el HTML para detectar módulos ausentes. Los avisos de diseño sobre los bordes de las tablas corresponden a contenedores desplazables con espaciado en sus celdas. La disponibilidad de estos cambios en producción depende del despliegue del commit correspondiente en Netlify.

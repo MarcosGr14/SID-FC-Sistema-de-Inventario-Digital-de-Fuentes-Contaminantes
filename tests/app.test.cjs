@@ -26,7 +26,7 @@ function app(offline = false, extra = [], options = {}) {
     };
   } };
   evaluate('const SIDMap = { init(){}, isInitialized:()=>true, invalidateSize(){}, render(sources){window.__mapSources=sources;}, focusFuente(id){window.__focused=id;} };');
-  for (const file of ['config', 'db', 'auth', 'guide', 'inspections', 'export', 'chart', 'workflows', 'ui']) evaluate(fs.readFileSync(`js/${file}.js`, 'utf8'));
+  for (const file of [...w.document.scripts].map(script=>script.getAttribute('src')?.split('?')[0]).filter(file=>file?.startsWith('js/')&&!['js/map.js','js/main.js'].includes(file))) evaluate(fs.readFileSync(file,'utf8'));
   if(options.beforeInit)evaluate(options.beforeInit);
   const init = evaluate('UI.init()');
   return { dom, w, evaluate, init, recover: () => { failed = false; }, clients: () => clients };
@@ -323,4 +323,44 @@ test('contact does not submit twice and recovers after a network failure', async
   assert.equal(form.querySelector('[type="submit"]').disabled,false);
   assert.match(d.getElementById('contactFormStatus').textContent,/No pudimos/);
   assert.equal(form.elements.namedItem('nombre').value,'Persona Apellido');a.dom.window.close();
+});
+
+
+test('criteria stay outside source tabs and show only the chosen parameter', async () => {
+  const a=app(),d=a.w.document;await a.init;
+  assert.equal(d.querySelector('.criteria-panel').parentElement.className,'workspace');
+  assert.equal(d.getElementById('tab-resumen').contains(d.getElementById('measurementGuide')),false);
+  d.getElementById('guideParameter').value='DBO5';d.getElementById('guideParameter').dispatchEvent(new a.w.Event('change'));
+  assert.match(d.getElementById('measurementGuide').textContent,/50 mg\/L/);
+  assert.doesNotMatch(d.getElementById('measurementGuide').textContent,/Potenciometría/);
+  d.getElementById('guideMatrix').value='aire';d.getElementById('guideMatrix').dispatchEvent(new a.w.Event('change'));
+  d.getElementById('guideParameter').value='PM2.5 (promedio 24 h)';d.getElementById('guideParameter').dispatchEvent(new a.w.Event('change'));
+  assert.match(d.getElementById('measurementGuide').textContent,/15 µg\/m³/);
+  assert.match(d.getElementById('measurementGuide').textContent,/Sin umbral configurado/);
+  assert.match(d.getElementById('measurementGuide').textContent,/no se aplica automáticamente/);
+  assert.equal(d.getElementById('fMatriz').value,'agua');a.dom.window.close();
+});
+
+test('expanded source and history views preserve paging and return to the map for entry', async () => {
+  const a=app(),d=a.w.document;await a.init;
+  d.querySelector('[data-tab="historico"]').click();
+  d.querySelector('#tab-historico [data-expand-workspace]').click();
+  assert.equal(d.querySelector('.workspace').classList.contains('workspace--expanded'),true);
+  assert.equal(d.querySelector('#tab-historico [data-expand-workspace]').getAttribute('aria-pressed'),'true');
+  d.querySelector('[data-history-page="2"]').click();assert.equal(d.querySelectorAll('#tablaHistorico tbody tr').length,6);
+  d.querySelector('[data-view-map]').click();await pause();
+  assert.equal(d.querySelector('.workspace').classList.contains('workspace--expanded'),false);
+  d.querySelector('#tab-historico [data-expand-workspace]').click();
+  d.querySelector('[data-tab="resumen"]').click();assert.equal(d.getElementById('tab-resumen').classList.contains('is-active'),true);
+  d.querySelector('[data-tab="inspeccion"]').click();
+  assert.equal(d.querySelector('.workspace').classList.contains('workspace--expanded'),false);
+  assert.equal(d.querySelector('#tab-historico [data-expand-workspace]').getAttribute('aria-pressed'),'false');a.dom.window.close();
+});
+
+test('technical guidance remains readable when configured criteria fail to load', async () => {
+  const a=app(true),d=a.w.document;await a.init;
+  assert.match(d.getElementById('measurementGuide').textContent,/No se pudieron consultar/);
+  assert.match(d.getElementById('measurementGuide').textContent,/Guía técnica de referencia/);
+  a.recover();d.getElementById('btnRetryConnection').click();await pause();await pause();await pause();
+  assert.doesNotMatch(d.getElementById('measurementGuide').textContent,/No se pudieron consultar/);a.dom.window.close();
 });

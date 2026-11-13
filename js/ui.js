@@ -7,7 +7,6 @@ const UI = (() => {
   let filtroActual = "todas";
   let paginaHistorico = 1;
   let paginaFuentes = 1;
-  let paginaLimites = 1;
   let paginaHistorialPerfil = 1;
   let paginaHistorialFiltrada = [];
   let fuentePerfilActiva = null;
@@ -20,7 +19,6 @@ const UI = (() => {
   let abrirRegistroNuevaFuente = null;
   const HISTORICO_POR_PAGINA = 6;
   const FUENTES_POR_PAGINA = 5;
-  const LIMITES_POR_PAGINA = 5;
   const HISTORIAL_PERFIL_POR_PAGINA = 5;
   const NOMBRES_CUENTAS_EQUIPO = {
     "marcos.gaitan@sidfc.test": "Marcos Gaitan",
@@ -299,15 +297,7 @@ const UI = (() => {
       )
       .join("") || `<tr><td colspan="6" class="table-empty">Aún no hay fuentes registradas.</td></tr>`;
 
-    const tbodyLimites = document.querySelector("#tablaLimites tbody");
-    const listadoLimites = Inspections.limites;
-    const paginasLimites = Math.max(1, Math.ceil(listadoLimites.length / LIMITES_POR_PAGINA));
-    paginaLimites = Math.min(paginaLimites, paginasLimites);
-    tbodyLimites.innerHTML = listadoLimites.slice((paginaLimites - 1) * LIMITES_POR_PAGINA, paginaLimites * LIMITES_POR_PAGINA)
-      .map((l) => `<tr><td>${titulo(l.matriz)}</td><td>${escapeHTML(l.parametro)}</td><td>${l.limite == null ? "Sin criterio cargado" : escapeHTML(l.limite)}</td><td>${l.umbral_aviso == null ? "—" : escapeHTML(l.umbral_aviso)}</td><td>${escapeHTML(l.unidad)}</td><td>${escapeHTML(l.referencia_normativa || "Sin referencia normativa documentada")}</td></tr>`)
-      .join("");
     renderPaginacionLista("paginacionFuentes", listadoFuentes.length, FUENTES_POR_PAGINA, paginaFuentes, (pagina) => { paginaFuentes = pagina; renderResumen(); });
-    renderPaginacionLista("paginacionLimites", listadoLimites.length, LIMITES_POR_PAGINA, paginaLimites, (pagina) => { paginaLimites = pagina; renderResumen(); });
     tbodyFuentes.onclick = (event) => {
       const button = event.target.closest("[data-open-profile]");
       if (button) abrirExpediente(button.dataset.openProfile);
@@ -833,6 +823,7 @@ const UI = (() => {
   }
 
   function irAlMapaDeFuente(id) {
+    ajustarVistaTrabajo(false);
     navegarA("inventario");
     filtroActual = "todas";
     document.querySelectorAll(".filter-tab").forEach((button) => {
@@ -915,6 +906,23 @@ const UI = (() => {
         renderMap();
       });
     }
+  }
+
+  function ajustarVistaTrabajo(active) {
+    document.querySelector(".workspace").classList.toggle("workspace--expanded", active);
+    document.querySelectorAll("[data-expand-workspace]").forEach(button => {
+      button.setAttribute("aria-pressed", String(active));
+      button.textContent = active ? "Volver a vista dividida" : "Ampliar tabla";
+    });
+    SIDMap.invalidateSize();
+  }
+  function wireWorkspaceExpansion() {
+    const workspace = document.querySelector(".workspace");
+    document.querySelectorAll("[data-expand-workspace]").forEach(button => button.addEventListener("click", () => {
+      ajustarVistaTrabajo(!workspace.classList.contains("workspace--expanded"));
+      document.querySelector(".form-panel").scrollIntoView({block:"start",behavior:"auto"});
+    }));
+    document.querySelector('.tab[data-tab="inspeccion"]').addEventListener("click", () => ajustarVistaTrabajo(false));
   }
 
   function wireNavigation() {
@@ -1041,6 +1049,8 @@ const UI = (() => {
     wireFuenteModal();
     wireInspeccionForm();
     wireExpedientes();
+    SIDCriteria.init();
+    wireWorkspaceExpansion();
     if (typeof SIDWorkflows !== "undefined") SIDWorkflows.init({getFuentes:()=>fuentes,getInspecciones:()=>inspecciones,refresh:refrescarDatos});
     document.getElementById("btnFitMap").addEventListener("click",()=>SIDMap.fitVisible?.());
     document.addEventListener("keydown", (event) => {
@@ -1100,6 +1110,7 @@ const UI = (() => {
   async function cargarDatos() {
     if (cargandoDatos) return;
     cargandoDatos = true;
+    SIDCriteria.setStatus("loading");
     const notice = document.getElementById("connectionNotice");
     const title = document.getElementById("connectionTitle");
     const message = document.getElementById("connectionMessage");
@@ -1108,7 +1119,10 @@ const UI = (() => {
     title.textContent = "Conectando con el inventario";
     message.textContent = "La navegación está disponible mientras cargan los registros.";
     try {
-      await Promise.all([Inspections.cargarLimites(), Auth.restore()]);
+      await Promise.all([
+        Inspections.cargarLimites().then(() => SIDCriteria.setStatus("ready")).catch(error => { SIDCriteria.setStatus("error"); throw error; }),
+        Auth.restore()
+      ]);
       await refrescarDatos();
       datosDisponibles = true;
       poblarParametros();
@@ -1121,7 +1135,7 @@ const UI = (() => {
       notice.classList.add("is-error"); retry.hidden = false;
       document.getElementById("dbModeTag").textContent = "Sin conexión al servicio de datos";
       ["statTotal", "statOk", "statAlert", "statMes"].forEach((id) => { document.getElementById(id).textContent = "—"; });
-      ["tablaHistorico", "tablaResumenFuentes", "tablaLimites"].forEach((id) => {
+      ["tablaHistorico", "tablaResumenFuentes"].forEach((id) => {
         const table = document.getElementById(id);
         table.querySelector("tbody").innerHTML = `<tr><td colspan="${table.querySelectorAll("th").length}" class="table-empty">Registros no disponibles. Usa Reintentar conexión para volver a consultarlos.</td></tr>`;
       });

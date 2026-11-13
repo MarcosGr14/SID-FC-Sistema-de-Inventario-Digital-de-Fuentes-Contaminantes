@@ -43,7 +43,9 @@ Si vas a medir un punto nuevo en una visita, regístralo como punto de evaluaci�
 ### Consultar y exportar información
 
 - **Historial:** filtra por fuente, responsable, medio, estado y fechas. Pulsa una fuente para localizarla en el mapa y abrir su expediente.
-- **Criterios y fuentes:** consulta las últimas lecturas y referencias configuradas en listas paginadas.
+- **Fuentes:** consulta un registro por sitio, el estado de su última visita y su expediente.
+- **Criterios de evaluación:** debajo del mapa, elige medio y parámetro para consultar el criterio configurado y la guía técnica. En móvil aparece plegado.
+- **Ampliar tabla:** disponible en Historial y Fuentes para consultar todas las columnas a ancho completo; permite volver a la vista dividida.
 - **Informes:** imprime el estado actual o el historial filtrado completo.
 - **Expediente:** revisa mediciones comparables, observaciones y fotografías, cargadas desde archivo o URL HTTPS. Las evidencias requieren sesión.
 - **Datos y respaldo:** descarga un respaldo JSON o un archivo CSV de las inspecciones.
@@ -63,7 +65,7 @@ SID-FC es una aplicación web de una sola página, construida con HTML, CSS y Ja
 | Capa | Componentes | Responsabilidad |
 | --- | --- | --- |
 | Interfaz | `index.html`, `css/style.css`, `js/ui.js` | Páginas, formularios, mapa, tablas y navegación. |
-| Lógica | `js/auth.js`, `js/inspections.js`, `js/export.js` | Sesión, evaluación de mediciones y exportación. |
+| Lógica | `js/auth.js`, `js/inspections.js`, `js/criteria.js`, `js/export.js` | Sesión, evaluación de mediciones y exportación. |
 | Datos | `js/db.js`, `sql/schema.sql`, Supabase | Persistencia en PostgreSQL y reglas RLS. |
 | Mapa | `js/map.js`, Leaflet, OpenStreetMap | Visualización y selección de coordenadas. |
 

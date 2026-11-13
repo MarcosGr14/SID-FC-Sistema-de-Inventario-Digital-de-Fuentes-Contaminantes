@@ -15,7 +15,7 @@
 
 <link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css"/>
 
-<link rel="stylesheet" href="css/style.css?v=20261113">
+<link rel="stylesheet" href="css/style.css?v=20261113.3">
 </head>
 <body>
 
@@ -152,9 +152,9 @@
 
     <div class="panel form-panel">
       <nav class="tabs" role="tablist" aria-label="Secciones de trabajo">
-        <button class="tab is-active" data-tab="inspeccion" type="button">Mediciones</button>
+        <button class="tab is-active" data-tab="inspeccion" type="button">Registrar medición</button>
         <button class="tab" data-tab="historico" type="button">Historial</button>
-        <button class="tab" data-tab="resumen" type="button">Criterios y fuentes</button>
+        <button class="tab" data-tab="resumen" type="button">Fuentes</button>
       </nav>
 
       
@@ -249,7 +249,7 @@
       <section class="tab-panel" id="tab-historico">
         <div class="panel__head panel__head--tight">
           <div><h3>Historial de mediciones</h3><p class="section-note">Cada registro es una visita o lectura; no se reemplaza la medición anterior.</p></div>
-          <div class="history-report-actions"><button id="btnReporteHistorial" type="button" class="btn btn--accent">Imprimir historial filtrado</button></div>
+          <div class="history-report-actions"><button type="button" class="btn btn--ghost" data-expand-workspace aria-pressed="false">Ampliar tabla</button><button id="btnReporteHistorial" type="button" class="btn btn--accent">Imprimir historial filtrado</button></div>
         </div>
         <div class="history-filters">
           <label class="field"><span>Buscar</span><input id="buscarHistorico" type="search" placeholder="Fuente, parámetro, inspector…"></label>
@@ -276,7 +276,7 @@
 
       
       <section class="tab-panel" id="tab-resumen">
-        <div class="panel__head panel__head--tight"><div><h3>Estado actual por fuente</h3><p class="section-note">Muestra la lectura más reciente; abre el expediente para consultar el historial completo.</p></div><button id="btnReporteResumen" type="button" class="btn btn--ghost">Imprimir estado actual</button></div>
+        <div class="panel__head panel__head--tight"><div><h3>Fuentes y puntos de monitoreo</h3><p class="section-note">Un registro por sitio, con el estado de su última visita.</p></div><div class="history-report-actions"><button type="button" class="btn btn--ghost" data-expand-workspace aria-pressed="false">Ampliar tabla</button><button id="btnReporteResumen" type="button" class="btn btn--ghost">Imprimir estado actual</button></div></div>
         <div class="table-scroll">
           <table class="data-table" id="tablaResumenFuentes">
             <thead><tr><th>Fuente</th><th>Medio / categoría</th><th>Sitio / coordenadas</th><th>Última medición</th><th>Estado</th><th>Expediente</th></tr></thead>
@@ -284,20 +284,20 @@
           </table>
         </div>
         <nav class="pagination" id="paginacionFuentes" aria-label="Páginas de fuentes"></nav>
-        <details class="reference-details"><summary>Guía de muestreo e interpretación</summary><label class="field"><span>Medio</span><select id="guideMatrix"><option value="agua">Agua</option><option value="aire">Aire</option><option value="suelo">Suelo</option></select></label><div id="measurementGuide" class="guide-grid"></div></details>
-        <details class="reference-details"><summary>Criterios configurados del proyecto</summary>
-        <p class="section-note">Los criterios marcados como pendientes de verificación no deben interpretarse como límites oficiales.</p>
-        <div class="table-scroll">
-          <table class="data-table" id="tablaLimites">
-            <thead><tr><th>Medio</th><th>Parámetro</th><th>Límite configurado</th><th>Umbral preventivo SID-FC</th><th>Unidad</th><th>Referencia</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        <nav class="pagination" id="paginacionLimites" aria-label="Páginas de parámetros y reglas"></nav>
-        </details>
       </section>
 
     </div>
+
+    <aside class="panel criteria-panel" aria-label="Criterios de evaluación">
+      <details id="criteriaDetails" open>
+        <summary class="criteria-panel__summary"><h2>Criterios de evaluación</h2><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+        <div class="criteria-filters">
+          <label class="field"><span>Medio</span><select id="guideMatrix"><option value="agua">Agua</option><option value="aire">Aire</option><option value="suelo">Suelo</option></select></label>
+          <label class="field"><span>Parámetro</span><select id="guideParameter" aria-controls="measurementGuide"></select></label>
+        </div>
+        <div id="measurementGuide" class="criteria-result" aria-live="polite"></div>
+      </details>
+    </aside>
   </section>
   </section>
 
@@ -516,8 +516,9 @@
 <script src="js/inspections.js?v=20261112.4"></script>
 <script src="js/export.js?v=20261112.4"></script>
 <script src="js/chart.js?v=20261112.4"></script>
-<script src="js/workflows.js?v=20261113.2"></script>
-<script src="js/ui.js?v=20261113.2"></script>
+<script src="js/criteria.js?v=20261113.3"></script>
+<script src="js/workflows.js?v=20261113.3"></script>
+<script src="js/ui.js?v=20261113.3"></script>
 <script src="js/main.js?v=20261112"></script>
 </body>
 </html>
