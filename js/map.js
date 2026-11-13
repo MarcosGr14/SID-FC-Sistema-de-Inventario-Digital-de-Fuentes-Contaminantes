@@ -50,7 +50,7 @@ const SIDMap = (() => {
       const lng = Number(f.lng);
       if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
       const marker = L.marker([f.lat, f.lng], { icon: iconFor(f.estado,f.tipo),title:f.nombre,alt:f.nombre });
-      const estadoTxt = ({ alerta: "⚠️ Alerta según criterio", intermedio: "◉ Rango preventivo", bueno: "✓ Bajo criterio configurado", sin_referencia: "— Sin criterio de referencia", sin_datos: "— Sin mediciones" })[f.estado] || "— Sin datos";
+      const estadoTxt = ({ alerta: "⚠️ Alerta según criterio", intermedio: "◉ Categoría intermedia", bueno: "✓ En referencia", sin_referencia: "— Sin criterio de referencia", sin_datos: "— Sin mediciones" })[f.estado] || "— Sin datos";
       const popup = document.createElement("div");
       const nombre = document.createElement("strong");
       nombre.textContent = f.nombre;

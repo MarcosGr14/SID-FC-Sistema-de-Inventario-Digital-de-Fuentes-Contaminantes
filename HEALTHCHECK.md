@@ -74,3 +74,17 @@ Historial y Fuentes permiten ampliar la tabla y volver a la vista dividida sin p
 Se comprobaron 1280 px en escritorio, 820 px en tableta y 390 px en móvil mediante tamaños de navegador emulados. No se observó desbordamiento horizontal del documento en móvil/tableta; las tablas mantienen su desplazamiento interno. Se verificaron consulta de parámetros, apertura de notas y ampliación/restauración de tablas en navegador. No se probó un dispositivo físico.
 
 Las 31 pruebas pasan. El arranque de las pruebas usa los scripts y el orden definidos en el HTML para detectar módulos ausentes. Los avisos de diseño sobre los bordes de las tablas corresponden a contenedores desplazables con espaciado en sus celdas. La disponibilidad de estos cambios en producción depende del despliegue del commit correspondiente en Netlify.
+
+## Criterios documentados y regreso a campo · 13 de noviembre de 2026
+
+Se sustituyeron las bandas genéricas por perfiles de referencia con ámbito, unidad, método, documento y fecha de revisión. El catálogo separa efluentes panameños, agua continental recreativa, objetivos operacionales de abastecimiento, aire ambiente OMS, categorías AQI EPA y escenarios de suelo CCME. La revisión documental y los valores están en `docs/CRITERIOS.md`.
+
+La migración de criterios se ejecutó en el SQL Editor de Supabase dentro de una transacción. Se verificaron después mediante la API pública las columnas nuevas, DQO 100 mg/L y SST 35 mg/L para efluentes, los campos preventivos retirados y la conservación de 8 fuentes/96 lecturas activas. Doce lecturas sintéticas de aire de 24 h conservan una copia del perfil OMS; otras 84 quedan sin clasificación hasta confirmar contexto. No se modificaron mediciones, fotografías, responsables ni procedencia. Se guardó un respaldo previo en la carpeta local ignorada `backups/`.
+
+Las nuevas mediciones guardan `criterio_id` y `criterio_detalle` junto con sus referencias. Los registros sin contexto confirmado no se clasifican mediante los antiguos booleanos o estados didácticos. Los cambios de fuente, parámetro o medio retiran el criterio que estaba seleccionado; los refrescos de datos conservan la selección activa. El CSV incorpora contexto y categoría precisa.
+
+**Desde un informe** permite volver a **Medición de campo** sin borrar el resultado ni las observaciones. El origen y las validaciones se sincronizan también al cambiar de origen manualmente y al restablecer el formulario.
+
+Las 41 pruebas pasan: valores frontera e intervalos exclusivos, dirección del oxígeno disuelto, PM2.5 y PM10 truncados según EPA, ámbitos/unidades incompatibles, fecha anterior a la norma, escenarios de suelo, copias históricas, metadatos malformados, persistencia del criterio y regreso desde informe, además de las regresiones existentes. Pasaron las comprobaciones de sintaxis y `git diff --check`.
+
+Se probó la interfaz local con datos públicos reales del servicio, en escritorio y tamaños emulados de 390 px y 820 px. No se observó desbordamiento horizontal del documento ni avisos/errores de consola. La revisión interactiva no creó mediciones reales ni realizó envíos de contacto. No sustituye una prueba física de móvil o un recorrido autenticado de escritura. Los cambios de interfaz quedan pendientes del próximo push/despliegue.

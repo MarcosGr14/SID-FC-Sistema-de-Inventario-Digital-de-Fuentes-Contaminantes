@@ -14,7 +14,7 @@ create table if not exists limites (
   id         uuid primary key default gen_random_uuid(),
   matriz     text not null check (matriz in ('agua','aire')),
   parametro  text not null,
-  limite     numeric not null,
+  limite     numeric,
   unidad     text not null
 );
 
@@ -23,13 +23,13 @@ create unique index if not exists idx_limites_matriz_parametro
 
 insert into limites (matriz, parametro, limite, unidad) values
   ('agua','DBO5', 50, 'mg/L'),
-  ('agua','DQO', 150, 'mg/L'),
-  ('agua','Sólidos Suspendidos Totales', 100, 'mg/L'),
+  ('agua','DQO', 100, 'mg/L'),
+  ('agua','Sólidos Suspendidos Totales', 35, 'mg/L'),
   ('agua','Aceites y Grasas', 20, 'mg/L'),
-  ('aire','Material Particulado', 150, 'mg/Nm³'),
-  ('aire','Óxidos de Nitrógeno (NOx)', 500, 'mg/Nm³'),
-  ('aire','Dióxido de Azufre (SO2)', 500, 'mg/Nm³'),
-  ('aire','Monóxido de Carbono (CO)', 300, 'mg/Nm³')
+  ('aire','Material Particulado', null, 'mg/Nm³'),
+  ('aire','Óxidos de Nitrógeno (NOx)', null, 'mg/Nm³'),
+  ('aire','Dióxido de Azufre (SO2)', null, 'mg/Nm³'),
+  ('aire','Monóxido de Carbono (CO)', null, 'mg/Nm³')
 on conflict (matriz, parametro) do nothing;
 create table if not exists inspecciones (
   id             uuid primary key default gen_random_uuid(),

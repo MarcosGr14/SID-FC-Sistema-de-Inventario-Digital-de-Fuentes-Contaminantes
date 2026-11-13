@@ -12,7 +12,7 @@ function app(offline = false, extra = [], options = {}) {
   let failed = offline, clients = 0, focused;
   const fuentes = Array.from({ length: 12 }, (_, i) => ({ id: `f${i}`, nombre: i === 0 ? `[DEMO] Estación ${i}` : `Estación ${i}`, tipo: 'agua', lat: 8.9, lng: -79.5 }));
   const limites = [{ matriz: 'agua', parametro: 'DBO5', limite: 50, umbral_aviso: 40, unidad: 'mg/L' }, { matriz: 'suelo', parametro: 'pH', limite: null, unidad: 'pH' }];
-  const inspecciones = Array.from({ length: 15 }, (_, i) => ({ id: `i${i}`, fuente_id: 'f0', fecha: new Date(2026, 8, i + 1).toISOString(), matriz: 'agua', parametro: 'DBO5', valor: i + 20, unidad: 'mg/L', estado: 'bueno', cumple: true, inspector: 'Responsable técnico' }));
+  const inspecciones = Array.from({ length: 15 }, (_, i) => ({ id: `i${i}`, fuente_id: 'f0', fecha: new Date(2026, 8, i + 1).toISOString(), matriz: 'agua', parametro: 'DBO5', valor: i + 20, unidad: 'mg/L', estado: 'bueno', cumple: true, criterio_maximo:50, referencia_criterio:'https://example.org/metodo', inspector: 'Responsable técnico' }));
   w.matchMedia = () => ({ matches: true });
   inspecciones.push(...extra);
   w.scrollTo = () => {};
@@ -62,11 +62,11 @@ test('history, pagination, source map action, and profile preserve every measure
   assert.notEqual(d.querySelector('#profileHistory tbody tr').textContent, first);
   a.dom.window.close();
 });
-test('criteria distinguish no reference, preventive range and exceedance', async () => {
+test('classification requires an explicit applicable context instead of an invented 80 percent band', async () => {
   const a = app(); await a.init;
-  assert.equal(a.evaluate('Inspections.evaluar("agua","DBO5",39).estado'), 'bueno');
-  assert.equal(a.evaluate('Inspections.evaluar("agua","DBO5",40).estado'), 'intermedio');
-  assert.equal(a.evaluate('Inspections.evaluar("agua","DBO5",51).estado'), 'alerta');
+  assert.equal(a.evaluate('Inspections.evaluar("agua","DBO5",39).estado'), 'sin_referencia');
+  const id=a.evaluate('MeasurementGuide.find("agua","DBO5").id');
+  for(const [value,state] of [[40,'bueno'],[50,'bueno'],[51,'alerta']]) assert.equal(a.evaluate(`Inspections.evaluar("agua","DBO5",${value},"2026-11-13",${JSON.stringify(id)}).estado`),state);
   assert.equal(a.evaluate('Inspections.evaluar("suelo","pH",7).estado'), 'sin_referencia');
   a.dom.window.close();
 });
@@ -84,7 +84,7 @@ test('contact validation recovers after correcting a full name without sending a
 });
 
 test('source summary uses the most critical reading of the latest visit', async () => {
-  const a = app(false, [{ id: 'tie', fuente_id: 'f0', fecha: new Date(2026,8,15).toISOString(), matriz: 'agua', parametro: 'DQO', valor: 200, unidad: 'mg/L', estado: 'alerta', cumple: false, inspector: 'Responsable técnico' }]);
+  const a = app(false, [{ id: 'tie', fuente_id: 'f0', fecha: new Date(2026,8,15).toISOString(), matriz: 'agua', parametro: 'DQO', valor: 200, unidad: 'mg/L', estado: 'alerta', cumple: false, criterio_maximo:100, referencia_criterio:'https://example.org/metodo', inspector: 'Responsable técnico' }]);
   await a.init;
   const row = a.w.document.querySelector('#tablaResumenFuentes tbody tr');
   assert.match(row.textContent, /Alerta/);
@@ -161,7 +161,7 @@ test('custom minimum criterion is stored with its supporting document', async ()
   a.evaluate('Auth.user=()=>({id:"inspector"});DB.addInspeccion=async record=>{window.__saved=record;return record;}');
   d.getElementById('fFuente').value='f0';d.getElementById('fFuente').dispatchEvent(new a.w.Event('change'));
   d.getElementById('fParametro').value='Oxígeno disuelto';d.getElementById('fParametro').onchange();
-  d.getElementById('fInspector').value='Responsable';d.getElementById('fValor').value='3';d.getElementById('fCriterioMin').value='5';d.getElementById('fCriterioRef').value='https://example.org/criterio';
+  d.getElementById('fInspector').value='Responsable';d.getElementById('fValor').value='3';d.getElementById('fCriterio').value='personalizado';d.getElementById('fCriterioMin').value='5';d.getElementById('fCriterioRef').value='https://example.org/criterio';
   d.getElementById('formInspeccion').dispatchEvent(new a.w.Event('submit',{cancelable:true}));
   while(d.getElementById('btnGuardarInspeccion').disabled) await pause();
   assert.equal(a.w.__saved.estado,'alerta');assert.equal(a.w.__saved.criterio_minimo,5);assert.equal(a.w.__saved.criterio_maximo,null);assert.equal(a.w.__saved.unidad,'mg/L');
@@ -336,8 +336,8 @@ test('criteria stay outside source tabs and show only the chosen parameter', asy
   d.getElementById('guideMatrix').value='aire';d.getElementById('guideMatrix').dispatchEvent(new a.w.Event('change'));
   d.getElementById('guideParameter').value='PM2.5 (promedio 24 h)';d.getElementById('guideParameter').dispatchEvent(new a.w.Event('change'));
   assert.match(d.getElementById('measurementGuide').textContent,/15 µg\/m³/);
-  assert.match(d.getElementById('measurementGuide').textContent,/Sin umbral configurado/);
-  assert.match(d.getElementById('measurementGuide').textContent,/no se aplica automáticamente/);
+  assert.match(d.getElementById('measurementGuide').textContent,/Sin mínimo publicado/);
+  assert.match(d.getElementById('measurementGuide').textContent,/no publica una banda preventiva/);
   assert.equal(d.getElementById('fMatriz').value,'agua');a.dom.window.close();
 });
 
@@ -360,7 +360,33 @@ test('expanded source and history views preserve paging and return to the map fo
 test('technical guidance remains readable when configured criteria fail to load', async () => {
   const a=app(true),d=a.w.document;await a.init;
   assert.match(d.getElementById('measurementGuide').textContent,/No se pudieron consultar/);
-  assert.match(d.getElementById('measurementGuide').textContent,/Guía técnica de referencia/);
+  assert.match(d.getElementById('measurementGuide').textContent,/Norma panameña/);
   a.recover();d.getElementById('btnRetryConnection').click();await pause();await pause();await pause();
   assert.doesNotMatch(d.getElementById('measurementGuide').textContent,/No se pudieron consultar/);a.dom.window.close();
+});
+
+test('external report mode returns to field mode without losing entered measurements', async () => {
+ const a=app(),d=a.w.document;await a.init;
+ d.getElementById('fValor').value='27.8';d.getElementById('fObservaciones').value='Lectura conservada';
+ const button=d.getElementById('btnDatoExterno');button.click();
+ assert.equal(button.textContent,'Volver a medición de campo');assert.equal(d.getElementById('externalRecordHelp').hidden,false);assert.equal(d.getElementById('fOrigenDato').value,'oficial');assert.equal(d.getElementById('fReferenciaDato').required,true);
+ button.click();assert.equal(d.getElementById('externalRecordHelp').hidden,true);assert.equal(d.getElementById('fOrigenDato').value,'campo');assert.equal(d.getElementById('fReferenciaDato').required,false);assert.equal(d.getElementById('fValor').value,'27.8');assert.equal(d.getElementById('fObservaciones').value,'Lectura conservada');
+ d.getElementById('fOrigenDato').value='laboratorio';d.getElementById('fOrigenDato').dispatchEvent(new a.w.Event('change'));assert.equal(d.getElementById('fReferenciaDato').required,true);
+ button.click();d.getElementById('formInspeccion').reset();assert.equal(button.getAttribute('aria-pressed'),'false');assert.equal(d.getElementById('externalRecordHelp').hidden,true);assert.equal(d.getElementById('fReferenciaDato').required,false);a.dom.window.close();
+});
+
+test('unreferenced legacy teaching states are not reused as scientific classifications', async()=>{
+ const a=app();await a.init;assert.equal(a.evaluate('Inspections.interpretar({origen_dato:"simulacion",estado:"bueno",valor:7,matriz:"suelo",parametro:"pH",unidad:"pH"}).estado'),'sin_referencia');a.dom.window.close();
+});
+
+test('selected catalog criterion is saved as a reproducible snapshot with the measurement', async()=>{
+ const a=app(),d=a.w.document;await a.init;
+ a.evaluate('Auth.user=()=>({id:"inspector"});DB.addInspeccion=async record=>{window.__saved=record;return record;}');
+ d.getElementById('fFuente').value='f0';d.getElementById('fFuente').dispatchEvent(new a.w.Event('change'));
+ d.getElementById('fCriterio').value=a.evaluate('MeasurementGuide.find("agua","DBO5").id');
+ d.getElementById('fInspector').value='Responsable';d.getElementById('fValor').value='40';
+ d.getElementById('formInspeccion').dispatchEvent(new a.w.Event('submit',{cancelable:true}));
+ for(let n=0;n<20&&!a.w.__saved;n++)await pause();
+ for(let n=0;n<20&&d.getElementById('btnGuardarInspeccion').disabled;n++)await pause();
+ assert.equal(d.getElementById('btnGuardarInspeccion').disabled,false);assert.ok(a.w.__saved);assert.equal(a.w.__saved.estado,'bueno');assert.equal(a.w.__saved.criterio_maximo,50);assert.equal(a.w.__saved.criterio_detalle.max,50);assert.match(a.w.__saved.referencia_criterio,/mici\.gob\.pa/);assert.equal(a.w.__saved.criterio_id,a.w.__saved.criterio_detalle.id);a.dom.window.close();
 });

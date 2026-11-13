@@ -33,10 +33,6 @@ end
 where categoria_fuente = 'otro';
 
 update public.limites
-set umbral_aviso = round(limite * 0.8, 2)
-where limite is not null and umbral_aviso is null;
-
-update public.limites
 set referencia_normativa = 'Referencia no documentada en SID-FC; confirmar norma, ámbito y vigencia antes de uso oficial.'
 where limite is not null and referencia_normativa is null;
 
@@ -53,19 +49,6 @@ alter table public.inspecciones
   add column if not exists origen_dato text not null default 'campo',
   add column if not exists metodo_muestreo text,
   add column if not exists referencia_dato text;
-
-update public.inspecciones i
-set estado = case
-  when l.id is null or l.limite is null
-    or (l.vigente_desde is not null and i.fecha::date < l.vigente_desde)
-    or (l.vigente_hasta is not null and i.fecha::date > l.vigente_hasta)
-    then 'sin_referencia'
-  when i.valor > l.limite then 'alerta'
-  when l.umbral_aviso is not null and i.valor >= l.umbral_aviso then 'intermedio'
-  else 'bueno'
-end
-from public.limites l
-where l.matriz = i.matriz and l.parametro = i.parametro;
 
 update public.inspecciones i
 set estado = 'sin_referencia'

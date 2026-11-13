@@ -15,7 +15,7 @@
 
 <link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css"/>
 
-<link rel="stylesheet" href="css/style.css?v=20261113.3">
+<link rel="stylesheet" href="css/style.css?v=20261113.4">
 </head>
 <body>
 
@@ -119,7 +119,7 @@
     <article class="stat-card">
       <span class="stat-card__icon stat-card__icon--red">⚠️</span>
       <div>
-        <p class="stat-card__label">Sobre el límite configurado</p>
+        <p class="stat-card__label">Fuera de referencia</p>
         <p class="stat-card__value stat-card__value--red" id="statAlert">–</p>
       </div>
     </article>
@@ -147,7 +147,7 @@
         <button class="filter-tab" data-filter="suelo" type="button">Suelo</button>
         <button class="filter-tab filter-tab--danger" data-filter="alerta" type="button">Alertas</button>
       </div>
-      <div class="map-toolbar"><button id="btnFitMap" class="btn btn--ghost" type="button">Ver todas</button><span class="map-key"><i class="key-good"></i> Bajo criterio <i class="key-warn"></i> Preventivo <i class="key-alert"></i> Alerta</span></div><div id="map" class="map"></div>
+      <div class="map-toolbar"><button id="btnFitMap" class="btn btn--ghost" type="button">Ver todas</button><span class="map-key"><i class="key-good"></i> En referencia <i class="key-warn"></i> Intermedio <i class="key-alert"></i> Alerta <i class="key-unknown"></i> Sin criterio</span></div><div id="map" class="map"></div>
     </div>
 
     <div class="panel form-panel">
@@ -198,6 +198,7 @@
             <select id="fParametro" required></select>
           </label>
 
+          <label class="field field--full"><span>Contexto y criterio de evaluación</span><select id="fCriterio"><option value="">Sin criterio confirmado</option></select><small class="field-help">Selecciona el uso y las condiciones que corresponden a esta medición.</small></label>
           <div id="measurementHint" class="measurement-hint field--full" aria-live="polite"></div>
           <label class="field">
             <span>Resultado analítico</span>
@@ -237,7 +238,7 @@
             <textarea id="fObservaciones" rows="3" placeholder="Ej: Medición realizada con multiparámetro HQ40d. Claridad visual media."></textarea>
           </label>
 
-          <details class="criterion-editor field--full"><summary>Criterio específico del informe o del sitio</summary><div class="grid-form"><label class="field"><span>Mínimo aceptable</span><input id="fCriterioMin" type="number" step="any"></label><label class="field"><span>Máximo aceptable</span><input id="fCriterioMax" type="number" step="any"></label><label class="field field--full"><span>Documento que respalda este intervalo</span><input id="fCriterioRef" type="url" placeholder="https://institucion/documento"></label></div><p class="field-help">Los intervalos de esta guía no se aplican automáticamente a contextos distintos.</p></details>
+          <details class="criterion-editor field--full"><summary>Intervalo específico documentado</summary><div class="grid-form"><label class="field"><span>Mínimo aceptable</span><input id="fCriterioMin" type="number" step="any"></label><label class="field"><span>Máximo aceptable</span><input id="fCriterioMax" type="number" step="any"></label><label class="field field--full"><span>Documento que respalda este intervalo</span><input id="fCriterioRef" type="url" placeholder="https://institucion/documento"></label></div><p class="field-help">Los intervalos de esta guía no se aplican automáticamente a contextos distintos.</p></details>
           <div class="field--full form-actions">
             <span id="formLoginHint" class="hint">🔒 Inicia sesión como inspector para registrar mediciones.</span>
             <button type="submit" class="btn btn--accent" id="btnGuardarInspeccion" disabled>Guardar Medición</button>
@@ -255,7 +256,7 @@
           <label class="field"><span>Buscar</span><input id="buscarHistorico" type="search" placeholder="Fuente, parámetro, inspector…"></label>
           <label class="field"><span>Fuente</span><select id="filtroFuenteHistorico"><option value="">Todas</option></select></label>
           <label class="field"><span>Medio</span><select id="filtroMatrizHistorico"><option value="">Todos</option><option value="agua">Agua</option><option value="aire">Aire</option><option value="suelo">Suelo</option></select></label>
-          <label class="field"><span>Estado</span><select id="filtroEstadoHistorico"><option value="">Todos</option><option value="bueno">Bajo criterio</option><option value="intermedio">Preventivo</option><option value="alerta">Alerta</option><option value="sin_referencia">Sin criterio</option></select></label>
+          <label class="field"><span>Estado</span><select id="filtroEstadoHistorico"><option value="">Todos</option><option value="bueno">En referencia</option><option value="intermedio">Intermedio</option><option value="alerta">Alerta</option><option value="sin_referencia">Sin criterio</option></select></label>
           <label class="field"><span>Desde</span><input id="filtroFechaDesde" type="date"></label>
           <label class="field"><span>Hasta</span><input id="filtroFechaHasta" type="date"></label>
           <button id="btnLimpiarFiltrosHistorico" class="btn btn--ghost" type="button">Limpiar</button>
@@ -295,6 +296,7 @@
           <label class="field"><span>Medio</span><select id="guideMatrix"><option value="agua">Agua</option><option value="aire">Aire</option><option value="suelo">Suelo</option></select></label>
           <label class="field"><span>Parámetro</span><select id="guideParameter" aria-controls="measurementGuide"></select></label>
         </div>
+        <label class="field criteria-context-selector"><span>Uso o escenario de referencia</span><select id="guideContext" aria-controls="measurementGuide"></select></label>
         <div id="measurementGuide" class="criteria-result" aria-live="polite"></div>
       </details>
     </aside>
@@ -509,16 +511,16 @@
 <script src="assets/vendor/supabase-2.119.0.js"></script>
 
 <script src="js/config.js?v=20261112"></script>
-<script src="js/db.js?v=20261113.2"></script>
-<script src="js/map.js?v=20261113"></script>
+<script src="js/db.js?v=20261113.4"></script>
+<script src="js/map.js?v=20261113.4"></script>
 <script src="js/auth.js?v=20261113.2"></script>
-<script src="js/guide.js?v=20261112.4"></script>
-<script src="js/inspections.js?v=20261112.4"></script>
-<script src="js/export.js?v=20261112.4"></script>
+<script src="js/guide.js?v=20261113.4"></script>
+<script src="js/inspections.js?v=20261113.4"></script>
+<script src="js/export.js?v=20261113.4"></script>
 <script src="js/chart.js?v=20261112.4"></script>
-<script src="js/criteria.js?v=20261113.3"></script>
-<script src="js/workflows.js?v=20261113.3"></script>
-<script src="js/ui.js?v=20261113.3"></script>
+<script src="js/criteria.js?v=20261113.4"></script>
+<script src="js/workflows.js?v=20261113.4"></script>
+<script src="js/ui.js?v=20261113.4"></script>
 <script src="js/main.js?v=20261112"></script>
 </body>
 </html>

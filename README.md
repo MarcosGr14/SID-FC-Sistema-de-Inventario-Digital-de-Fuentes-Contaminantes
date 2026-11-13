@@ -8,12 +8,12 @@ SID-FC es una aplicación académica para ubicar fuentes contaminantes en Panam�
 
 ## ✨ ¿Qué ofrece?
 
-- 🗺️ Mapa interactivo de fuentes georreferenciadas, con filtros por agua, aire y estado.
+- 🗺️ Mapa interactivo de fuentes georreferenciadas, con filtros por agua, aire, suelo y estado.
 - 📍 Registro de fuentes permanentes y puntos de evaluación con referencia del sitio y coordenadas.
-- 🧪 Registro de mediciones de agua y aire, vinculadas a una ubicación.
-- 🚦 Comparación de mediciones con los límites configurados y señalización de alertas.
+- 🧪 Registro de mediciones de agua, aire y suelo, vinculadas a una ubicación.
+- 🚦 Comparación con criterios documentados por contexto, con trazabilidad de la referencia aplicada.
 - 📚 Historial de inspecciones con búsqueda y paginación.
-- 📊 Resumen por fuente y consulta de límites máximos permisibles.
+- 📊 Resumen por fuente y consulta de normas y guías por medio, parámetro y uso.
 - 📄 Reportes y exportación de datos en CSV y JSON.
 - 📱 Diseño adaptable a computadoras, tabletas y teléfonos.
 
@@ -38,13 +38,14 @@ Si vas a medir un punto nuevo en una visita, regístralo como punto de evaluaci�
 1. En **Mediciones**, selecciona la fuente o el punto evaluado.
 2. Selecciona el medio evaluado: una misma fuente admite mediciones de agua, aire o suelo.
 3. Elige el parámetro, ingresa el valor medido, la fecha y hora, y el nombre del inspector.
-4. Guarda la medición para consultar el resultado en el mapa, el resumen y el histórico.
+4. Confirma el contexto y criterio aplicable. Si necesitas un intervalo específico, aporta el documento que lo respalda; sin criterio confirmado, la lectura queda sin clasificación.
+5. Guarda la medición para consultar el resultado en el mapa, el resumen y el histórico.
 
 ### Consultar y exportar información
 
 - **Historial:** filtra por fuente, responsable, medio, estado y fechas. Pulsa una fuente para localizarla en el mapa y abrir su expediente.
 - **Fuentes:** consulta un registro por sitio, el estado de su última visita y su expediente.
-- **Criterios de evaluación:** debajo del mapa, elige medio y parámetro para consultar el criterio configurado y la guía técnica. En móvil aparece plegado.
+- **Criterios de evaluación:** debajo del mapa, elige medio, parámetro y contexto para consultar valores, categorías, método y fuentes documentales. En móvil aparece plegado.
 - **Ampliar tabla:** disponible en Historial y Fuentes para consultar todas las columnas a ancho completo; permite volver a la vista dividida.
 - **Informes:** imprime el estado actual o el historial filtrado completo.
 - **Expediente:** revisa mediciones comparables, observaciones y fotografías, cargadas desde archivo o URL HTTPS. Las evidencias requieren sesión.
@@ -107,6 +108,8 @@ En **Mediciones → Desde un informe**, selecciona un sitio e ingresa el resulta
 
 El CSV utiliza estas columnas: `fuente,medio,parametro,valor,unidad,fecha,responsable,referencia`. La fecha incluye la zona horaria, por ejemplo `2026-11-12T09:00:00-05:00`. Admite hasta 100 lecturas por archivo.
 
-La guía de muestreo distingue referencias internacionales, criterios del proyecto y objetivos específicos del sitio. Un intervalo propio requiere el documento que lo respalda. Los datos académicos conservan su procedencia en la ficha técnica.
+El botón **Volver a medición de campo** permite salir del modo informe sin perder lo escrito. También puedes cambiar el origen a análisis de laboratorio.
+
+La guía de muestreo distingue normas panameñas por ámbito, referencias internacionales y objetivos específicos del sitio. Un intervalo propio requiere el documento que lo respalda. Los datos académicos conservan su procedencia en la ficha técnica. La [revisión documental de criterios](docs/CRITERIOS.md) detalla valores, condiciones y fuentes; la migración de criterios en `supabase/migrations` conserva una copia del perfil aplicado a cada nueva medición.
 
 `sql/organizar_inventario.sql` corresponde a la limpieza puntual del 12 de noviembre, no a una migración recurrente. Las fuentes retiradas del inventario se archivan de forma recuperable. `sql/restaurar_fuentes_archivadas.sql` permite restaurarlas desde una sesión administrativa.

@@ -119,15 +119,18 @@ const UI = (() => {
   }
 
   function titulo(value) {
-    return ({ agua: "Agua", aire: "Aire", suelo: "Suelo", sin_datos: "Sin datos", bueno: "Bajo criterio", intermedio: "Preventivo", alerta: "Alerta", sin_referencia: "Sin referencia", campo: "Campo", laboratorio: "Laboratorio", oficial: "Oficial", punto_muestreo:"Punto de monitoreo",residuos_solidos:"Residuos sólidos",erosion_suelo:"Erosión y sedimentos",extraccion_materiales:"Extracción de materiales",emision_atmosferica:"Emisión atmosférica",descarga_agua:"Descarga de agua",simulacion: "Académico" })[value] || String(value || "—").replaceAll("_", " ");
+    return ({ agua: "Agua", aire: "Aire", suelo: "Suelo", sin_datos: "Sin datos", bueno: "En referencia", intermedio: "Intermedio", alerta: "Alerta", sin_referencia: "Sin referencia", campo: "Campo", laboratorio: "Laboratorio", oficial: "Oficial", punto_muestreo:"Punto de monitoreo",residuos_solidos:"Residuos sólidos",erosion_suelo:"Erosión y sedimentos",extraccion_materiales:"Extracción de materiales",emision_atmosferica:"Emisión atmosférica",descarga_agua:"Descarga de agua",simulacion: "Académico" })[value] || String(value || "—").replaceAll("_", " ");
   }
-  function estadoDe(i) { return i.estado || (i.cumple ? "bueno" : "alerta"); }
-  function pillEstado(estado) {
+  function estadoDe(i) { return Inspections.interpretar(i).estado; }
+  function pillEstado(estado,etiqueta) {
     const cls = estado === "alerta" ? "status-pill--alert" : estado === "bueno" ? "status-pill--ok" : estado === "intermedio" ? "status-pill--mid" : "status-pill--unknown";
-    const label = estado === "bueno" ? "Bajo criterio" : titulo(estado);
+    const label = etiqueta || (estado === "bueno" ? "En referencia" : titulo(estado));
     return `<span class="status-pill ${cls}">${escapeHTML(label)}</span>`;
   }
 
+  function limpiarCriterio() {
+    for(const id of ["fCriterio","fCriterioMin","fCriterioMax","fCriterioRef"])document.getElementById(id).value="";
+  }
   function poblarParametros() {
     const matriz = document.getElementById("fMatriz").value;
     const paramSel = document.getElementById("fParametro");
@@ -144,18 +147,24 @@ const UI = (() => {
     if (opciones.some(l=>l.parametro===parametroPrevio)) paramSel.value=parametroPrevio;
     unidadSpan.textContent = opciones.find(l=>l.parametro===paramSel.value)?.unidad || "";
     paramSel.onchange = () => {
+      limpiarCriterio();
       const lim = Inspections.limiteDe(matriz, paramSel.value);
       unidadSpan.textContent = lim?.unidad || "";
-      mostrarGuiaParametro();
+      poblarCriterios();
     };
-    mostrarGuiaParametro();
+    poblarCriterios();
   }
 
+  function poblarCriterios() {
+    const select=document.getElementById("fCriterio"),previous=select.value;
+    const profiles=MeasurementGuide.forParameter(document.getElementById("fMatriz").value,document.getElementById("fParametro").value);
+    select.innerHTML='<option value="">Sin criterio confirmado</option>'+profiles.filter(p=>p.tipo!=="contextual").map(p=>`<option value="${escapeHTML(p.id)}">${escapeHTML(p.contexto)}</option>`).join('')+'<option value="personalizado">Intervalo específico documentado</option>';
+    if([...select.options].some(option=>option.value===previous))select.value=previous;
+    mostrarGuiaParametro();
+  }
   function mostrarGuiaParametro() {
-    const node = document.getElementById("measurementHint");
-    if (!node || typeof MeasurementGuide === "undefined") return;
-    const item = MeasurementGuide.find(document.getElementById("fMatriz").value,document.getElementById("fParametro").value);
-    node.innerHTML = item ? `<strong>${escapeHTML(MeasurementGuide.range(item))}</strong><span>${escapeHTML(item.contexto)}</span><p>${escapeHTML(item.nota)}</p>` : '<p>Criterio específico del proyecto. Verifica la norma, el medio y la unidad antes de clasificar el resultado.</p>';
+    const node=document.getElementById("measurementHint"),profile=MeasurementGuide.byId(document.getElementById("fCriterio").value);
+    node.innerHTML=profile?`<strong>${escapeHTML(MeasurementGuide.range(profile))}</strong><span>${escapeHTML(profile.contexto)} · ${escapeHTML(profile.norma)}</span><p>${escapeHTML(profile.nota)}</p>`:'<p>Sin contexto confirmado, el resultado se guarda sin clasificación. Los intervalos específicos requieren un documento de respaldo.</p>';
   }
   function ajustarMatrizFuente() {
     const fuente = fuentes.find((f) => String(f.id) === document.getElementById("fFuente").value);
@@ -212,7 +221,7 @@ const UI = (() => {
         <td>${titulo(i.matriz)}</td>
         <td>${escapeHTML(i.parametro)}</td>
         <td>${escapeHTML(i.valor)} ${escapeHTML(i.unidad || "")}</td>
-        <td>${pillEstado(estadoDe(i))}</td>
+        <td>${pillEstado(estadoDe(i),Inspections.interpretar(i).etiqueta)}</td>
         <td>${escapeHTML((i.inspector||"").replace(/\s*\(DEMO\)/gi,""))}</td>
         <td>${titulo(i.origen_dato || "campo")}</td>
       </tr>`
@@ -304,13 +313,13 @@ const UI = (() => {
     };
   }
   function fichaTecnica(r) {
-    const criterio = r.criterio_minimo != null || r.criterio_maximo != null;
+    const criterio = r.criterio_minimo != null || r.criterio_maximo != null || r.criterio_detalle;
     if (!r.observaciones && !criterio) return "—";
-    const intervalo = criterio ? `<p>Criterio aplicado: ${r.criterio_minimo == null ? "sin mínimo" : escapeHTML(r.criterio_minimo)} – ${r.criterio_maximo == null ? "sin máximo" : escapeHTML(r.criterio_maximo)} ${escapeHTML(r.unidad || "")}</p><p>${escapeHTML(r.referencia_criterio || "")}</p>` : "";
+    const intervalo = r.criterio_detalle ? `<p>${escapeHTML(r.criterio_detalle.contexto)}</p><p>${escapeHTML(r.criterio_detalle.norma)}</p><p>Interpretación: ${escapeHTML(Inspections.interpretar(r).etiqueta)}</p><p>${escapeHTML(r.referencia_criterio||"")}</p>` : criterio ? `<p>Criterio aplicado: ${r.criterio_minimo == null ? "sin mínimo" : escapeHTML(r.criterio_minimo)} – ${r.criterio_maximo == null ? "sin máximo" : escapeHTML(r.criterio_maximo)} ${escapeHTML(r.unidad || "")}</p><p>${escapeHTML(r.referencia_criterio || "")}</p>` : "";
     return `<details class="technical-details"><summary>Ficha técnica</summary>${intervalo}${r.observaciones ? `<p>${escapeHTML(r.observaciones)}</p>` : ""}</details>`;
   }
   function dibujarGrafico(rows) {
-    SIDChart.render(document.getElementById("profileChart"),rows);
+    SIDChart.render(document.getElementById("profileChart"),rows.map(row=>({...row,estado:estadoDe(row)})));
   }
 
   async function abrirExpediente(id) {
@@ -346,7 +355,7 @@ const UI = (() => {
       const first = same[0], last = same.at(-1);
       const trend = document.getElementById("profileTrend");
       if (!first || !last || first === last) trend.textContent = "Se requieren al menos dos mediciones comparables para observar una tendencia.";
-      else if (["metodo_muestreo","criterio_minimo","criterio_maximo","referencia_criterio"].some(k=>(first[k]??null)!==(last[k]??null))) trend.textContent="El método o criterio cambió entre lecturas. Revisa su comparabilidad antes de interpretar la evolución.";
+      else if (["metodo_muestreo","criterio_id","criterio_minimo","criterio_maximo","referencia_criterio"].some(k=>(first[k]??null)!==(last[k]??null))) trend.textContent="El método o criterio cambió entre lecturas. Revisa su comparabilidad antes de interpretar la evolución.";
       else if (estadoDe(first) === "sin_referencia" || estadoDe(last) === "sin_referencia") trend.textContent = `Variación de ${first.valor} a ${last.valor} ${unidad}. Sin criterio normativo vigente; la variación no determina mejora ni cumplimiento.`;
       else {
         const a = { alerta: 3, intermedio: 2, bueno: 1 }[estadoDe(first)], b = { alerta: 3, intermedio: 2, bueno: 1 }[estadoDe(last)];
@@ -357,7 +366,7 @@ const UI = (() => {
     openModal("modalExpediente");
     select.onchange = updateGraph; updateGraph();
     const lecturasPerfil = [...rows].reverse();
-    document.querySelector("#profileHistory tbody").innerHTML = lecturasPerfil.slice((paginaHistorialPerfil - 1) * HISTORIAL_PERFIL_POR_PAGINA, paginaHistorialPerfil * HISTORIAL_PERFIL_POR_PAGINA).map((r) => `<tr><td>${fmtFecha(r.fecha)}</td><td>${escapeHTML(titulo(r.matriz))} · ${escapeHTML(r.parametro)}</td><td>${escapeHTML(r.valor)} ${escapeHTML(r.unidad || "")}</td><td>${pillEstado(estadoDe(r))}</td><td>${escapeHTML(titulo(r.origen_dato || "campo"))}${r.referencia_dato || r.metodo_muestreo ? `<details class="technical-details"><summary>Ver procedencia</summary><p>${escapeHTML(r.referencia_dato || "")}</p><p>${escapeHTML(r.metodo_muestreo || "")}</p></details>` : ""}</td><td>${fichaTecnica(r)}</td></tr>`).join("") || '<tr><td colspan="6" class="table-empty">Aún no hay mediciones para esta fuente.</td></tr>';
+    document.querySelector("#profileHistory tbody").innerHTML = lecturasPerfil.slice((paginaHistorialPerfil - 1) * HISTORIAL_PERFIL_POR_PAGINA, paginaHistorialPerfil * HISTORIAL_PERFIL_POR_PAGINA).map((r) => `<tr><td>${fmtFecha(r.fecha)}</td><td>${escapeHTML(titulo(r.matriz))} · ${escapeHTML(r.parametro)}</td><td>${escapeHTML(r.valor)} ${escapeHTML(r.unidad || "")}</td><td>${pillEstado(estadoDe(r),Inspections.interpretar(r).etiqueta)}</td><td>${escapeHTML(titulo(r.origen_dato || "campo"))}${r.referencia_dato || r.metodo_muestreo ? `<details class="technical-details"><summary>Ver procedencia</summary><p>${escapeHTML(r.referencia_dato || "")}</p><p>${escapeHTML(r.metodo_muestreo || "")}</p></details>` : ""}</td><td>${fichaTecnica(r)}</td></tr>`).join("") || '<tr><td colspan="6" class="table-empty">Aún no hay mediciones para esta fuente.</td></tr>';
     renderPaginacionLista("paginacionProfileHistory", lecturasPerfil.length, HISTORIAL_PERFIL_POR_PAGINA, paginaHistorialPerfil, (pagina) => { paginaHistorialPerfil = pagina; abrirExpediente(fuente.id); });
     const inspectionSelect = document.getElementById("profilePhotoInspection");
     inspectionSelect.innerHTML = '<option value="">Evidencia general de la fuente</option>' + [...rows].reverse().map((r) => `<option value="${escapeHTML(r.id)}">${escapeHTML(fmtFecha(r.fecha))} · ${escapeHTML(r.parametro)}</option>`).join("");
@@ -703,13 +712,17 @@ const UI = (() => {
       document.querySelector("#sourcePicker summary")?.focus();
     });
 
-    document.getElementById("fFuente").addEventListener("change", ajustarMatrizFuente);
+    document.getElementById("fFuente").addEventListener("change",()=>{limpiarCriterio();ajustarMatrizFuente();});
     document.getElementById("fFuente").addEventListener("change", actualizarDetalleFuente);
     document.getElementById("fInspector").placeholder = "Nombre de la persona que realiza la medición";
     document.getElementById("fFuente").title = "Selecciona un punto ya registrado o crea uno nuevo";
     document.getElementById("fFecha").value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-    document.getElementById("fMatriz").addEventListener("change", poblarParametros);
-    document.getElementById("fOrigenDato").addEventListener("change",()=>{document.getElementById("fReferenciaDato").required=document.getElementById("fOrigenDato").value==="oficial";});
+    document.getElementById("fMatriz").addEventListener("change",()=>{limpiarCriterio();poblarParametros();});
+    document.getElementById("fCriterio").addEventListener("change",()=>{
+      if(document.getElementById("fCriterio").value==="personalizado")document.querySelector(".criterion-editor").open=true;
+      mostrarGuiaParametro();
+    });
+    document.getElementById("fOrigenDato").addEventListener("change",()=>{document.getElementById("fReferenciaDato").required=["oficial","laboratorio"].includes(document.getElementById("fOrigenDato").value);});
 
     let guardandoMedicion = false;
     document.getElementById("formInspeccion").addEventListener("submit", async (e) => {
@@ -743,18 +756,30 @@ const UI = (() => {
         return;
       }
       const minimoRaw=document.getElementById("fCriterioMin").value, maximoRaw=document.getElementById("fCriterioMax").value;
-      const criterio_minimo=minimoRaw===""?null:Number(minimoRaw), criterio_maximo=maximoRaw===""?null:Number(maximoRaw);
-      const referencia_criterio=document.getElementById("fCriterioRef").value.trim();
+      let criterio_minimo=minimoRaw===""?null:Number(minimoRaw), criterio_maximo=maximoRaw===""?null:Number(maximoRaw);
+      let referencia_criterio=document.getElementById("fCriterioRef").value.trim();
+      if([criterio_minimo,criterio_maximo].some(v=>v!=null&&!Number.isFinite(v))){toast("Introduce límites numéricos válidos.",true);return;}
       if(criterio_minimo!=null&&criterio_maximo!=null&&criterio_minimo>criterio_maximo){toast("El mínimo debe ser menor o igual al máximo.",true);return;}
       if((criterio_minimo!=null||criterio_maximo!=null)&&!/^https:\/\//.test(referencia_criterio)){toast("Agrega el documento HTTPS que respalda el intervalo.",true);return;}
       if(origen_dato==="oficial"&&!/^https:\/\//.test(referencia_dato)){toast("El informe externo necesita un enlace HTTPS verificable.",true);return;}
-      const evalRes = Inspections.evaluar(matriz, parametro, valor, fecha);
-      if(criterio_minimo!=null||criterio_maximo!=null){evalRes.estado=((criterio_minimo!=null&&valor<criterio_minimo)||(criterio_maximo!=null&&valor>criterio_maximo))?"alerta":"bueno";evalRes.cumple=evalRes.estado!=="alerta";}
-      else if(origen_dato==="oficial"||MeasurementGuide.find(matriz,parametro)){evalRes.estado="sin_referencia";evalRes.cumple=true;}
+      const criterioId=document.getElementById("fCriterio").value;
+      let evalRes=Inspections.evaluar(matriz,parametro,valor,fecha,criterioId);
+      let criterio_detalle=null,criterio_id=null;
+      const personalizado=criterio_minimo!=null||criterio_maximo!=null;
+      if(personalizado&&criterioId!=="personalizado"){toast("Selecciona Intervalo específico documentado para usar los límites introducidos.",true);return;}
+      if(criterioId==="personalizado"&&!personalizado){toast("Define al menos un extremo del intervalo específico.",true);return;}
+      if(personalizado){
+        criterio_detalle={id:"personalizado",matriz,parametro,unidad:evalRes.unidad,min:criterio_minimo,max:criterio_maximo,tipo:"especifico",contexto:"Intervalo específico documentado por el responsable",norma:"Documento aportado para esta medición",fuente:referencia_criterio};
+        evalRes={...evalRes,...MeasurementGuide.evaluateSnapshot(criterio_detalle,valor,{matriz,parametro,unidad:evalRes.unidad,fecha})};
+        criterio_id="personalizado";
+      }else if(evalRes.criterio){
+        criterio_detalle=MeasurementGuide.snapshot(evalRes.criterio);criterio_id=evalRes.criterio.id;
+        criterio_minimo=evalRes.criterio.min;criterio_maximo=evalRes.criterio.max;referencia_criterio=evalRes.criterio.fuente;
+      }
       const registro = {
         fuente_id, inspector, matriz, parametro, valor, fecha: new Date(fecha).toISOString(),
         observaciones, unidad: evalRes.unidad, cumple: evalRes.cumple, estado: evalRes.estado,
-        origen_dato, metodo_muestreo, referencia_dato, criterio_minimo, criterio_maximo, referencia_criterio,
+        origen_dato, metodo_muestreo, referencia_dato, criterio_minimo, criterio_maximo, referencia_criterio,criterio_id,criterio_detalle,
       };
 
       const submit = document.getElementById("btnGuardarInspeccion");
@@ -772,7 +797,7 @@ const UI = (() => {
           evalRes.estado === "alerta"
             ? "Resultado fuera del criterio de evaluación documentado."
             : evalRes.estado === "intermedio"
-              ? "Medición guardada en rango preventivo SID-FC."
+              ? "Medición guardada en la categoría intermedia del criterio seleccionado."
               : evalRes.estado === "sin_referencia"
                 ? "Medición guardada; no hay criterio vigente para interpretarla."
                 : "Medición guardada bajo el criterio configurado.",

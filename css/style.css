@@ -789,3 +789,9 @@ button,a{touch-action:manipulation}button{user-select:none}button:focus-visible,
 @media(max-width:560px){.criteria-filters{grid-template-columns:1fr;gap:12px}.workspace--expanded .history-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.workspace--expanded .history-filters .field:first-child{grid-column:1/-1}.criteria-panel__summary h2{font-size:1.05rem}}
 @media(prefers-reduced-motion:reduce){.criteria-panel__summary svg{transition:none}}
 .form-panel .panel__head--tight{align-items:flex-start;flex-wrap:wrap;gap:12px}.history-report-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.history-report-actions .btn{min-height:40px;white-space:normal}
+
+.form-panel #tab-inspeccion>.panel__head{flex-wrap:wrap;gap:12px}#btnDatoExterno{white-space:normal;max-width:100%;min-height:44px}
+
+.criteria-context-selector{margin:16px 0 0;min-width:0}.criteria-context-selector select{width:100%;min-height:44px;font-size:1rem}.criteria-bands{min-width:0;font-size:.85rem}.criteria-bands th,.criteria-bands td{white-space:normal;overflow-wrap:normal}.criteria-bands .status-pill{white-space:normal}.criteria-range dd{font-size:.92rem}
+
+.map-key .key-unknown{background:#61776b}

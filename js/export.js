@@ -36,7 +36,7 @@ const SIDExport = (() => {
     const [fuentes, inspecciones] = await Promise.all([DB.getFuentes(), DB.getInspecciones()]);
     const fuentesById = Object.fromEntries(fuentes.map((f) => [f.id, f]));
 
-    const header = ["Fecha", "Fuente", "Categoría de fuente", "Ubicación", "Latitud", "Longitud", "Medio", "Parámetro", "Valor", "Unidad", "Estado SID-FC", "Origen del dato", "Método", "Procedencia", "Inspector", "Observaciones", "Criterio mínimo", "Criterio máximo", "Documento del criterio"];
+    const header = ["Fecha", "Fuente", "Categoría de fuente", "Ubicación", "Latitud", "Longitud", "Medio", "Parámetro", "Valor", "Unidad", "Estado SID-FC", "Origen del dato", "Método", "Procedencia", "Inspector", "Observaciones", "Criterio mínimo", "Criterio máximo", "Documento del criterio", "Contexto de evaluación", "Categoría de referencia"];
     const rows = inspecciones.map((i) => [
       i.fecha,
       fuentesById[i.fuente_id]?.nombre.replace(/^\[DEMO\]\s*/i, "") || i.fuente_id,
@@ -48,7 +48,7 @@ const SIDExport = (() => {
       i.parametro,
       i.valor,
       i.unidad,
-      i.estado || (i.cumple ? "bueno" : "alerta"),
+      Inspections.interpretar(i).estado,
       i.origen_dato || "campo",
       i.metodo_muestreo || "",
       i.referencia_dato || "",
@@ -57,6 +57,8 @@ const SIDExport = (() => {
       i.criterio_minimo ?? "",
       i.criterio_maximo ?? "",
       i.referencia_criterio || "",
+      i.criterio_detalle?.contexto || "",
+      Inspections.interpretar(i).etiqueta,
     ]);
 
     const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v ?? "").replace(/^[=+@-]/, "\'$&").replace(/"/g, '""')}"`).join(",")).join("\n");

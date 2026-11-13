@@ -58,7 +58,17 @@ const SIDWorkflows = (() => {
     options.addEventListener('keydown',e=>{const buttons=[...options.querySelectorAll('button')],n=buttons.indexOf(document.activeElement);if(['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();buttons[(n+(e.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length]?.focus();}if(e.key==='Escape')picker.open=false;});
     const help=document.getElementById('externalRecordHelp');
     help.insertAdjacentHTML('beforeend',`<details class="csv-import"><summary>Importar un CSV de mediciones</summary><p>Columnas: fuente, medio, parametro, valor, unidad, fecha, responsable, referencia. Registra antes los sitios que no existan.</p><button id="csvTemplate" type="button" class="btn btn--ghost">Descargar plantilla</button><label class="field"><span>Archivo CSV · hasta 100 filas</span><input id="csvFile" type="file" accept=".csv,text/csv"></label><div id="csvPreview" aria-live="polite"></div><button id="csvCommit" type="button" class="btn btn--accent" disabled>Guardar registros revisados</button><p id="csvStatus" role="status"></p></details>`);
-    document.getElementById('btnDatoExterno').addEventListener('click',()=>{help.hidden=false;document.getElementById('fOrigenDato').value='oficial';document.getElementById('fReferenciaDato').required=true;document.getElementById('fReferenciaDato').placeholder='https://institucion.gob.pa/informe';});
+    const externalButton=document.getElementById('btnDatoExterno'),origin=document.getElementById('fOrigenDato'),reference=document.getElementById('fReferenciaDato');
+    const originalPlaceholder=reference.placeholder;
+    function externalMode(active,updateOrigin=true){
+      help.hidden=!active;externalButton.textContent=active?'Volver a medición de campo':'Desde un informe';externalButton.setAttribute('aria-pressed',String(active));
+      if(updateOrigin)origin.value=active?'oficial':'campo';
+      reference.required=active||origin.value==='laboratorio';reference.placeholder=active?'https://institucion.gob.pa/informe':originalPlaceholder;
+    }
+    externalButton.addEventListener('click',()=>externalMode(help.hidden));
+    origin.addEventListener('change',()=>externalMode(origin.value==='oficial',false));
+    document.getElementById('formInspeccion').addEventListener('reset',()=>externalMode(false));
+    externalMode(origin.value==='oficial',false);
     document.getElementById('csvTemplate').onclick=()=>{const blob=new Blob(['fuente,medio,parametro,valor,unidad,fecha,responsable,referencia\n"Nombre del sitio",agua,Turbidez,12,NTU,2026-11-12T09:00:00-05:00,"Institución responsable",https://institucion.gob.pa/informe\n'],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='plantilla-mediciones.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
     let pending=[], reading=0, saving=false;
     const commit=document.getElementById('csvCommit'),status=document.getElementById('csvStatus'),fileInput=document.getElementById('csvFile'),preview=document.getElementById('csvPreview');
