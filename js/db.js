@@ -57,7 +57,11 @@ const DB = (() => {
           options.signal?.addEventListener("abort", abort, { once: true });
           if (options.signal?.aborted) controller.abort();
           const timer = setTimeout(abort, 10000);
-          try { return await fetch(input, { ...options, signal: controller.signal }); }
+          try {
+            const response = await fetch(input, { ...options, signal: controller.signal });
+            const body = response.body ? await response.arrayBuffer() : null;
+            return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
+          }
           finally { clearTimeout(timer); options.signal?.removeEventListener("abort", abort); }
         } } }
       );
@@ -66,6 +70,19 @@ const DB = (() => {
   }
 
   const isSupabase = () => SID_CONFIG.SUPABASE_READY;
+
+  async function allRows(table, column = "id", ascending = true, filter = query => query) {
+    const rows = [], pageSize = 500;
+    for (let offset = 0; ; offset += pageSize) {
+      let query = filter(client().from(table).select("*")).order(column, { ascending });
+      if (column !== "id") query = query.order("id");
+      const { data, error } = await query.range(offset, offset + pageSize - 1);
+      if (error) throw error;
+      if (!Array.isArray(data)) throw new Error("El servicio devolvió datos incompletos.");
+      rows.push(...data);
+      if (data.length < pageSize) return rows;
+    }
+  }
 
   return {
     client,
@@ -83,9 +100,7 @@ const DB = (() => {
 
     async getFuentes() {
       if (isSupabase()) {
-        const { data, error } = await client().from("fuentes").select("*").order("nombre");
-        if (error) throw error;
-        return data;
+        return allRows("fuentes", "nombre");
       }
       return readLS(LS_KEYS.fuentes);
     },
@@ -109,12 +124,7 @@ const DB = (() => {
 
     async getInspecciones() {
       if (isSupabase()) {
-        const { data, error } = await client()
-          .from("inspecciones")
-          .select("*")
-          .order("fecha", { ascending: false });
-        if (error) throw error;
-        return data;
+        return allRows("inspecciones", "fecha", false);
       }
       return readLS(LS_KEYS.inspecciones).sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
     },
@@ -147,9 +157,7 @@ const DB = (() => {
 
     async getLimites() {
       if (isSupabase()) {
-        const { data, error } = await client().from("limites").select("*");
-        if (error) throw error;
-        return data;
+        return allRows("limites");
       }
       return readLS(LS_KEYS.limites);
     },
@@ -160,18 +168,13 @@ const DB = (() => {
 
     async getEvidencias(fuenteId) {
       if (!isSupabase()) return [];
-      const { data, error } = await client()
-        .from("evidencias_fuente")
-        .select("id, fuente_id, inspeccion_id, ruta_archivo, photo_url, descripcion, creado_por, creado_en")
-        .eq("fuente_id", fuenteId)
-        .order("creado_en", { ascending: false });
-      if (error) throw error;
+      const data = await allRows("evidencias_fuente", "creado_en", false, query => query.eq("fuente_id", fuenteId));
       return Promise.all(data.map(async (item) => {
         if (item.photo_url) return { ...item, url: item.photo_url };
-        const { data: signed, error: signedError } = await client()
-          .storage.from("sidfc-evidencias").createSignedUrl(item.ruta_archivo, 3600);
-        if (signedError) throw signedError;
-        return { ...item, url: signed.signedUrl };
+        try {
+          const { data: signed, error } = await client().storage.from("sidfc-evidencias").createSignedUrl(item.ruta_archivo, 3600);
+          return { ...item, url: error ? null : signed?.signedUrl || null };
+        } catch { return { ...item, url: null }; }
       }));
     },
 
@@ -188,8 +191,10 @@ const DB = (() => {
       const entries = await Promise.all([...latest.entries()].map(async ([fuenteId, item]) => {
         if (item.photo_url) return [fuenteId, item.photo_url];
         if (!item.ruta_archivo) return [fuenteId, null];
-        const { data: signed, error: signedError } = await client().storage.from("sidfc-evidencias").createSignedUrl(item.ruta_archivo, 3600);
-        return [fuenteId, signedError ? null : signed.signedUrl];
+        try {
+          const { data: signed, error } = await client().storage.from("sidfc-evidencias").createSignedUrl(item.ruta_archivo, 3600);
+          return [fuenteId, error ? null : signed?.signedUrl || null];
+        } catch { return [fuenteId, null]; }
       }));
       const fotos = Object.fromEntries(entries.filter(([, url]) => url));
       return fotos;

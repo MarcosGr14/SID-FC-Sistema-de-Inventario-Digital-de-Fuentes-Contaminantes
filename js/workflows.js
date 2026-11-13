@@ -63,9 +63,33 @@ const SIDWorkflows = (() => {
     help.insertAdjacentHTML('beforeend',`<details class="csv-import"><summary>Importar un CSV de mediciones</summary><p>Columnas: fuente, medio, parametro, valor, unidad, fecha, responsable, referencia. Registra antes los sitios que no existan.</p><button id="csvTemplate" type="button" class="btn btn--ghost">Descargar plantilla</button><label class="field"><span>Archivo CSV · hasta 100 filas</span><input id="csvFile" type="file" accept=".csv,text/csv"></label><div id="csvPreview" aria-live="polite"></div><button id="csvCommit" type="button" class="btn btn--accent" disabled>Guardar registros revisados</button><p id="csvStatus" role="status"></p></details>`);
     document.getElementById('btnDatoExterno').addEventListener('click',()=>{help.hidden=false;document.getElementById('fOrigenDato').value='oficial';document.getElementById('fReferenciaDato').required=true;document.getElementById('fReferenciaDato').placeholder='https://institucion.gob.pa/informe';});
     document.getElementById('csvTemplate').onclick=()=>{const blob=new Blob(['fuente,medio,parametro,valor,unidad,fecha,responsable,referencia\n"Nombre del sitio",agua,Turbidez,12,NTU,2026-11-12T09:00:00-05:00,"Institución responsable",https://institucion.gob.pa/informe\n'],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='plantilla-mediciones.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
-    let pending=[];const commit=document.getElementById('csvCommit'),status=document.getElementById('csvStatus');
-    document.getElementById('csvFile').addEventListener('change',async e=>{pending=[];commit.disabled=true;const file=e.target.files[0];if(!file)return;try{if(file.size>1048576)throw Error('El CSV supera 1 MB.');const result=prepareImport(parseCSV(await file.text()),api.getFuentes(),api.getInspecciones());pending=result.validos;document.getElementById('csvPreview').innerHTML=`<p>${pending.length} registros válidos · ${result.duplicados} duplicados omitidos.</p><div class="table-scroll"><table class="data-table"><thead><tr><th>Sitio</th><th>Parámetro</th><th>Valor</th></tr></thead><tbody>${pending.slice(0,5).map(i=>`<tr><td>${esc(api.getFuentes().find(f=>f.id===i.fuente_id).nombre)}</td><td>${esc(i.parametro)}</td><td>${esc(i.valor)} ${esc(i.unidad)}</td></tr>`).join('')}</tbody></table></div>`;status.textContent=pending.length>5?'Vista previa de las primeras 5 filas.':'';commit.disabled=!pending.length||!Auth.user();}catch(error){document.getElementById('csvPreview').replaceChildren();status.textContent=error.message;}});
-    commit.onclick=async()=>{if(!Auth.user()||!pending.length)return;commit.disabled=true;try{const checked=prepareImport(pending.map(i=>({fuente:i.fuente_id,medio:i.matriz,parametro:i.parametro,valor:String(i.valor),unidad:i.unidad,fecha:i.fecha,responsable:i.inspector,referencia:i.referencia_dato,metodo:i.metodo_muestreo,observaciones:i.observaciones})),api.getFuentes(),api.getInspecciones());if(!checked.validos.length){status.textContent='Los registros ya existen.';pending=[];return;}await DB.addInspeccionesExternas(checked.validos);pending=[];status.textContent='Importación guardada.';try{await api.refresh();}catch{status.textContent='Importación guardada. Recarga el inventario para consultar los resultados.';}}catch(error){status.textContent='No se guardó la importación: '+error.message;commit.disabled=false;}};
+    let pending=[], reading=0, saving=false;
+    const commit=document.getElementById('csvCommit'),status=document.getElementById('csvStatus'),fileInput=document.getElementById('csvFile'),preview=document.getElementById('csvPreview');
+    const updateCommit=()=>{commit.disabled=saving||!pending.length||!Auth.user();};
+    document.addEventListener('sidfc:sessionchange',updateCommit);
+    fileInput.addEventListener('change',async e=>{
+      if(saving)return;
+      const version=++reading,file=e.target.files[0];pending=[];updateCommit();preview.replaceChildren();status.textContent='';
+      if(!file)return;
+      try{
+        if(file.size>1048576)throw Error('El CSV supera 1 MB.');
+        const text=await file.text();if(version!==reading)return;
+        const result=prepareImport(parseCSV(text),api.getFuentes(),api.getInspecciones());pending=result.validos;
+        preview.innerHTML=`<p>${pending.length} registros válidos · ${result.duplicados} duplicados omitidos.</p><div class="table-scroll"><table class="data-table"><thead><tr><th>Sitio</th><th>Parámetro</th><th>Valor</th></tr></thead><tbody>${pending.slice(0,5).map(i=>`<tr><td>${esc(api.getFuentes().find(f=>f.id===i.fuente_id).nombre)}</td><td>${esc(i.parametro)}</td><td>${esc(i.valor)} ${esc(i.unidad)}</td></tr>`).join('')}</tbody></table></div>`;
+        status.textContent=pending.length>5?'Vista previa de las primeras 5 filas.':'';updateCommit();
+      }catch(error){if(version!==reading)return;pending=[];preview.replaceChildren();status.textContent=error.message;updateCommit();}
+    });
+    commit.onclick=async()=>{
+      if(saving||!Auth.user()||!pending.length)return;
+      saving=true;fileInput.disabled=true;updateCommit();
+      try{
+        const checked=prepareImport(pending.map(i=>({fuente:i.fuente_id,medio:i.matriz,parametro:i.parametro,valor:String(i.valor),unidad:i.unidad,fecha:i.fecha,responsable:i.inspector,referencia:i.referencia_dato,metodo:i.metodo_muestreo,observaciones:i.observaciones})),api.getFuentes(),api.getInspecciones());
+        if(!checked.validos.length){status.textContent='Los registros ya existen.';pending=[];return;}
+        await DB.addInspeccionesExternas(checked.validos);pending=[];status.textContent='Importación guardada.';
+        try{await api.refresh();}catch{status.textContent='Importación guardada. Recarga el inventario para consultar los resultados.';}
+      }catch(error){status.textContent='No se guardó la importación: '+error.message;}
+      finally{saving=false;fileInput.disabled=false;updateCommit();}
+    };
   }
   return {init,parseCSV,prepareImport,compact};
 })();

@@ -11,6 +11,10 @@ const UI = (() => {
   let paginaHistorialPerfil = 1;
   let paginaHistorialFiltrada = [];
   let fuentePerfilActiva = null;
+  let solicitudPerfil = 0;
+  const solicitudesEvidencia = new Map();
+  let versionDatos = 0;
+  let versionFotos = 0;
   let abrirFuenteDespuesDelLogin = false;
   let regresarAInspeccionDespuesDeFuente = false;
   let abrirRegistroNuevaFuente = null;
@@ -87,6 +91,7 @@ const UI = (() => {
   function poblarFuentesSelect() {
     const sel = document.getElementById("fFuente");
     const ayuda = document.getElementById("fFuenteHelp");
+    const seleccionada = sel.value;
     sel.innerHTML = `<option value="" disabled selected>${fuentes.length ? "Seleccionar fuente…" : "Aún no hay fuentes registradas"}</option>`;
     fuentes.forEach((f) => {
       const opt = document.createElement("option");
@@ -94,6 +99,7 @@ const UI = (() => {
       opt.textContent = `${f.nombre} · ${titulo(f.tipo)}`;
       sel.appendChild(opt);
     });
+    if (fuentes.some(f=>String(f.id)===seleccionada)) sel.value=seleccionada;
     ayuda.textContent = fuentes.length
       ? "Cada medición se vincula al sitio seleccionado."
       : "El inventario está vacío. Crea primero una fuente o un punto puntual de evaluación; después quedará disponible aquí para registrar sus mediciones.";
@@ -127,6 +133,7 @@ const UI = (() => {
   function poblarParametros() {
     const matriz = document.getElementById("fMatriz").value;
     const paramSel = document.getElementById("fParametro");
+    const parametroPrevio = paramSel.value;
     const unidadSpan = document.getElementById("fUnidad");
     const opciones = Inspections.porMatriz(matriz);
     paramSel.innerHTML = "";
@@ -136,7 +143,8 @@ const UI = (() => {
       opt.textContent = `${l.parametro} · ${l.unidad}`;
       paramSel.appendChild(opt);
     });
-    unidadSpan.textContent = opciones[0]?.unidad || "";
+    if (opciones.some(l=>l.parametro===parametroPrevio)) paramSel.value=parametroPrevio;
+    unidadSpan.textContent = opciones.find(l=>l.parametro===paramSel.value)?.unidad || "";
     paramSel.onchange = () => {
       const lim = Inspections.limiteDe(matriz, paramSel.value);
       unidadSpan.textContent = lim?.unidad || "";
@@ -318,10 +326,15 @@ const UI = (() => {
   async function abrirExpediente(id) {
     const fuente = fuentes.find((f) => String(f.id) === String(id));
     if (!fuente) return;
+    const solicitud = ++solicitudPerfil;
     const perfilAbierto=!document.getElementById("modalExpediente").hidden;
     const parametroPrevio=String(fuentePerfilActiva?.id)===String(id)?document.getElementById("profileParameter").value:null;
     const scrollPrevio=document.querySelector("#modalExpediente .modal").scrollTop;
-    if (String(fuentePerfilActiva?.id) !== String(fuente.id)) paginaHistorialPerfil = 1;
+    if (String(fuentePerfilActiva?.id) !== String(fuente.id)) {
+      paginaHistorialPerfil = 1;
+      document.getElementById("profileEvidenceForm").reset();
+      actualizarOrigenFoto();
+    }
     fuentePerfilActiva = fuente;
     const rows = inspecciones.filter((i) => String(i.fuente_id) === String(id)).sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
     paginaHistorialPerfil = Math.min(paginaHistorialPerfil, Math.max(1, Math.ceil(rows.length / HISTORIAL_PERFIL_POR_PAGINA)));
@@ -351,6 +364,7 @@ const UI = (() => {
       }
       document.getElementById("profileChartNote").textContent = fuente.esDemostracion ? "Evaluación académica · criterios documentados en la ficha técnica." : "Las lecturas se comparan por parámetro y unidad; confirma el método y el criterio aplicable.";
     };
+    openModal("modalExpediente");
     select.onchange = updateGraph; updateGraph();
     const lecturasPerfil = [...rows].reverse();
     document.querySelector("#profileHistory tbody").innerHTML = lecturasPerfil.slice((paginaHistorialPerfil - 1) * HISTORIAL_PERFIL_POR_PAGINA, paginaHistorialPerfil * HISTORIAL_PERFIL_POR_PAGINA).map((r) => `<tr><td>${fmtFecha(r.fecha)}</td><td>${escapeHTML(titulo(r.matriz))} · ${escapeHTML(r.parametro)}</td><td>${escapeHTML(r.valor)} ${escapeHTML(r.unidad || "")}</td><td>${pillEstado(estadoDe(r))}</td><td>${escapeHTML(titulo(r.origen_dato || "campo"))}${r.referencia_dato || r.metodo_muestreo ? `<details class="technical-details"><summary>Ver procedencia</summary><p>${escapeHTML(r.referencia_dato || "")}</p><p>${escapeHTML(r.metodo_muestreo || "")}</p></details>` : ""}</td><td>${fichaTecnica(r)}</td></tr>`).join("") || '<tr><td colspan="6" class="table-empty">Aún no hay mediciones para esta fuente.</td></tr>';
@@ -362,13 +376,30 @@ const UI = (() => {
     document.getElementById("profileEvidenceNotice").textContent = DB.hasEvidenceStorage() ? (Auth.user() ? "Consulta las imágenes de la fuente o adjunta una nueva. Los archivos se guardan de forma privada; los enlaces conservan el acceso de su sitio de origen." : "Inicia sesión para agregar o ver evidencias fotográficas.") : "La evidencia fotográfica requiere la conexión configurada con Supabase Storage.";
     const gallery = document.getElementById("profileEvidenceGallery"); gallery.replaceChildren();
     if (!Auth.user()) gallery.innerHTML = '<p class="evidence-empty">Las fotografías están disponibles al iniciar sesión.</p>';
+    if(perfilAbierto) document.querySelector("#modalExpediente .modal").scrollTop=scrollPrevio;
+    else document.querySelector("#modalExpediente .modal").scrollTop=0;
+    gallery.setAttribute("aria-busy", "false");
     if (Auth.user() && DB.hasEvidenceStorage()) {
+      const usuario = Auth.user().id;
+      const vigente = () => solicitud === solicitudPerfil && !document.getElementById("modalExpediente").hidden && Auth.user()?.id === usuario;
+      const clave = `${usuario}:${id}`;
+      gallery.innerHTML = '<p class="evidence-empty" role="status">Cargando fotografías…</p>';
+      gallery.setAttribute("aria-busy", "true");
       try {
-        const evidencias = await DB.getEvidencias(id);
+        if (!solicitudesEvidencia.has(clave)) {
+          const pendiente = Promise.resolve().then(() => DB.getEvidencias(id)).finally(() => { if(solicitudesEvidencia.get(clave)===pendiente) solicitudesEvidencia.delete(clave); });
+          solicitudesEvidencia.set(clave, pendiente);
+        }
+        const evidencias = await solicitudesEvidencia.get(clave);
+        if (!vigente()) return;
+        gallery.replaceChildren();
         if (!evidencias.length) gallery.innerHTML = '<p class="evidence-empty">Todavía no hay fotografías para esta fuente.</p>';
         evidencias.forEach((item) => {
           const card = document.createElement("figure"); card.className = "evidence-card";
-          const img = document.createElement("img"); img.src = item.url; img.alt = item.descripcion || "Fotografía de la fuente"; img.loading = "lazy";
+          const img = document.createElement("img");
+          if (item.url) img.src = item.url;
+          else { img.hidden = true; card.classList.add("evidence-card--unavailable"); }
+          img.alt = item.descripcion || "Fotografía de la fuente"; img.loading = "lazy";
           img.addEventListener("error", () => { img.hidden = true; card.classList.add("evidence-card--unavailable"); }, { once: true });
           const cap = document.createElement("figcaption");
           const title = document.createElement("strong"); title.textContent = item.descripcion?.startsWith("DEMO") ? "Fotografía de referencia" : item.descripcion || "Fotografía de la fuente";
@@ -380,21 +411,41 @@ const UI = (() => {
           }
           card.append(img, cap); gallery.append(card);
         });
-      } catch (error) { document.getElementById("profileEvidenceNotice").textContent = `No se pudieron cargar evidencias: ${error.message}`; }
+      } catch (error) {
+        if (!vigente()) return;
+        const mensaje = document.createElement("p");
+        mensaje.className = "evidence-empty";
+        mensaje.textContent = "No se pudieron cargar las fotografías. El expediente sigue disponible.";
+        const reintentar = document.createElement("button");
+        reintentar.type = "button";
+        reintentar.className = "btn btn--ghost";
+        reintentar.textContent = "Reintentar fotografías";
+        reintentar.addEventListener("click", () => abrirExpediente(id));
+        gallery.replaceChildren(mensaje, reintentar);
+      } finally {
+        if (vigente()) gallery.setAttribute("aria-busy", "false");
+      }
     }
-    openModal("modalExpediente");
-    if(perfilAbierto) document.querySelector("#modalExpediente .modal").scrollTop=scrollPrevio;
+  }
+  async function cargarFotosMapa() {
+    const version = ++versionFotos, usuario = Auth.user()?.id;
+    if (!usuario || !DB.hasEvidenceStorage()) return;
+    const ids = fuentes.map(f=>f.id);
+    try {
+      const fotos = await DB.getEvidenciasMapa(ids);
+      if (version !== versionFotos || Auth.user()?.id !== usuario) return;
+      fuentes = fuentes.map(f=>({...f, _fotoMapa:fotos[f.id] || null}));
+      if (SIDMap.updatePhotos) SIDMap.updatePhotos(fuentes);
+      else renderMap();
+    } catch {}
   }
   async function refrescarDatos() {
-    [fuentes, inspecciones] = await Promise.all([DB.getFuentes(), DB.getInspecciones()]);
-    fuentes = fuentes.map((f) => ({ ...f, esDemostracion: /^\[DEMO\]\s*/i.test(f.nombre), ubicacion_original:f.ubicacion, ubicacion: typeof SIDWorkflows === "undefined" ? f.ubicacion : SIDWorkflows.compact(f), nombre: f.nombre.replace(/^\[DEMO\]\s*/i, "") }));
-    if (Auth.user() && DB.hasEvidenceStorage()) {
-      let fotos = {};
-      try { fotos = await DB.getEvidenciasMapa(fuentes.map((f) => f.id)); } catch {}
-      fuentes = fuentes.map((fuente) => ({ ...fuente, _fotoMapa: fotos[fuente.id] || null }));
-    } else {
-      fuentes = fuentes.map((fuente) => ({ ...fuente, _fotoMapa: null }));
-    }
+    const version = ++versionDatos;
+    const [nuevasFuentes, nuevasInspecciones] = await Promise.all([DB.getFuentes(), DB.getInspecciones()]);
+    if (version !== versionDatos) return;
+    versionFotos++;
+    fuentes = nuevasFuentes.map((f) => ({ ...f, _fotoMapa:null, esDemostracion: /^\[DEMO\]\s*/i.test(f.nombre), ubicacion_original:f.ubicacion, ubicacion: typeof SIDWorkflows === "undefined" ? f.ubicacion : SIDWorkflows.compact(f), nombre: f.nombre.replace(/^\[DEMO\]\s*/i, "") }));
+    inspecciones = nuevasInspecciones;
     paginaHistorico = 1;
     poblarFuentesSelect();
     const filtroFuente = document.getElementById("filtroFuenteHistorico");
@@ -407,6 +458,7 @@ const UI = (() => {
     renderMap();
     renderHistorico(document.getElementById("buscarHistorico").value);
     renderResumen();
+    void cargarFotosMapa();
   }
   function reflejarSesion() {
     const u = Auth.user();
@@ -470,6 +522,7 @@ const UI = (() => {
     backdrop._justOpened = false;
   }
   function closeModal(id) {
+    if (id === "modalExpediente") solicitudPerfil++;
     const backdrop = document.getElementById(id);
     backdrop.hidden = true;
     backdrop._returnFocus?.focus({preventScroll:true});
@@ -481,10 +534,14 @@ const UI = (() => {
   function wireLoginModal() {
     document.getElementById("btnLogin").addEventListener("click", async () => {
       if (Auth.user()) {
-        await Auth.logout();
-        reflejarSesion();
-        refrescarDatos().catch(() => {});
-        toast("Sesión cerrada.");
+        const button = document.getElementById("btnLogin"); button.disabled = true;
+        try {
+          await Auth.logout();
+          reflejarSesion();
+          refrescarDatos().catch(() => {});
+          toast("Sesión cerrada.");
+        } catch(error) { toast(error.message, true); }
+        finally { button.disabled = false; }
         return;
       }
       document.getElementById("demoNote").textContent = DB.mode() === "demo"
@@ -497,12 +554,16 @@ const UI = (() => {
       if (event.target.id === "modalLogin") closeModal("modalLogin");
     });
 
+    let iniciandoSesion = false;
     document.getElementById("formLogin").addEventListener("submit", async (e) => {
       e.preventDefault();
+      if (iniciandoSesion) return;
       const email = document.getElementById("loginEmail").value;
       const password = document.getElementById("loginPassword").value;
       const errorEl = document.getElementById("loginError");
       errorEl.hidden = true;
+      const submit = e.target.querySelector('[type="submit"]');
+      iniciandoSesion = true; submit.disabled = true;
       try {
         await Auth.login(email, password);
         closeModal("modalLogin");
@@ -517,7 +578,7 @@ const UI = (() => {
       } catch (err) {
         errorEl.textContent = err.message;
         errorEl.hidden = false;
-      }
+      } finally { iniciandoSesion = false; submit.disabled = false; }
     });
   }
 
@@ -797,8 +858,10 @@ const UI = (() => {
     document.querySelectorAll('[name="photoInputMode"]').forEach((input) => input.addEventListener("change", actualizarOrigenFoto));
     document.getElementById("btnCloseProfile").addEventListener("click", () => closeModal("modalExpediente"));
     document.getElementById("modalExpediente").addEventListener("click", (event) => { if (event.target.id === "modalExpediente") closeModal("modalExpediente"); });
+    let subiendoEvidencia = false;
     document.getElementById("profileEvidenceForm").addEventListener("submit", async (event) => {
       event.preventDefault();
+      if (subiendoEvidencia) return;
       const file = document.getElementById("profilePhoto").files[0];
       const photoUrl = document.getElementById("profilePhotoUrl").value.trim();
       const status = document.getElementById("profileEvidenceNotice");
@@ -809,16 +872,25 @@ const UI = (() => {
         try { if (new URL(photoUrl).protocol !== "https:") throw new Error(); }
         catch { status.textContent = "Pega una URL válida que comience con https://."; return; }
       }
-      const submit = event.currentTarget.querySelector('[type="submit"]'); submit.disabled = true;
+      const submit = event.currentTarget.querySelector('[type="submit"]');
+      const fuenteId = fuentePerfilActiva.id, solicitud = solicitudPerfil;
+      const vigente = () => solicitud === solicitudPerfil && !document.getElementById("modalExpediente").hidden;
+      subiendoEvidencia = true; submit.disabled = true;
       try {
-        await DB.addEvidencia({ fuenteId: fuentePerfilActiva.id, inspeccionId: document.getElementById("profilePhotoInspection").value, file, photoUrl, descripcion: document.getElementById("profilePhotoDescription").value.trim() });
-        document.getElementById("profileEvidenceForm").reset();
-        actualizarOrigenFoto();
-        status.textContent = "Evidencia guardada.";
-        await refrescarDatos();
-        await abrirExpediente(fuentePerfilActiva.id);
-      } catch (error) { status.textContent = error.message; }
-      finally { submit.disabled = false; }
+        await DB.addEvidencia({ fuenteId, inspeccionId: document.getElementById("profilePhotoInspection").value, file, photoUrl, descripcion: document.getElementById("profilePhotoDescription").value.trim() });
+        solicitudesEvidencia.delete(`${Auth.user()?.id}:${fuenteId}`);
+        if (vigente()) {
+          document.getElementById("profileEvidenceForm").reset();
+          actualizarOrigenFoto();
+          status.textContent = "Evidencia guardada.";
+        }
+        try { await refrescarDatos(); }
+        catch { toast("Evidencia guardada. Recarga el inventario para consultarla."); return; }
+        if (vigente()) await abrirExpediente(fuenteId);
+      } catch (error) {
+        if (vigente()) status.textContent = error.message;
+        else toast("No se pudo guardar la evidencia: " + error.message, true);
+      } finally { subiendoEvidencia = false; submit.disabled = false; }
     });
   }
 
@@ -878,8 +950,10 @@ const UI = (() => {
     if (!form) return;
     const status = document.getElementById("contactFormStatus");
     form.addEventListener("input", (event) => event.target.setCustomValidity?.(""));
+    let enviandoContacto = false;
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
+      if (enviandoContacto) return;
       const nombre = form.elements.namedItem("nombre");
       const celular = form.elements.namedItem("celular");
       const comentario = form.elements.namedItem("comentario");
@@ -895,7 +969,10 @@ const UI = (() => {
       if (!form.reportValidity()) return;
 
       const boton = form.querySelector('button[type="submit"]');
+      enviandoContacto = true;
       boton.disabled = true;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
       status.textContent = "Enviando tu mensaje…";
       status.classList.remove("is-error");
       try {
@@ -904,6 +981,7 @@ const UI = (() => {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: data.toString(),
+          signal: controller.signal,
         });
         if (!response.ok) throw new Error("No se pudo enviar el mensaje.");
         form.reset();
@@ -912,6 +990,8 @@ const UI = (() => {
         status.textContent = "No pudimos enviar el mensaje. Inténtalo de nuevo más tarde.";
         status.classList.add("is-error");
       } finally {
+        clearTimeout(timeout);
+        enviandoContacto = false;
         boton.disabled = false;
       }
     });
@@ -994,6 +1074,22 @@ const UI = (() => {
     wireReporte();
     wireExportFooter();
     reflejarSesion();
+    let usuarioAnterior = null;
+    Auth.onChange(user => {
+      reflejarSesion();
+      document.dispatchEvent(new Event("sidfc:sessionchange"));
+      if (usuarioAnterior === (user?.id || null)) return;
+      usuarioAnterior = user?.id || null;
+      versionFotos++;
+      solicitudesEvidencia.clear();
+      fuentes = fuentes.map(f=>({...f, _fotoMapa:null}));
+      renderMap();
+      if (!document.getElementById("modalExpediente").hidden) closeModal("modalExpediente");
+      document.getElementById("profileEvidenceGallery").replaceChildren();
+      document.getElementById("profileEvidenceForm").reset();
+      actualizarOrigenFoto();
+      if (datosDisponibles && user) void cargarFotosMapa();
+    });
 
     document.getElementById("btnRetryConnection").addEventListener("click", cargarDatos);
     window.addEventListener("online", cargarDatos);

@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const { JSDOM } = require('jsdom');
 const html = fs.readFileSync('index.html', 'utf8');
 const pause = () => new Promise(resolve => setTimeout(resolve, 30));
-function app(offline = false, extra = []) {
+function app(offline = false, extra = [], options = {}) {
   const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only', pretendToBeVisual: true });
   const w = dom.window;
   const evaluate = code => vm.runInContext(code, dom.getInternalVMContext());
@@ -18,14 +18,16 @@ function app(offline = false, extra = []) {
   w.scrollTo = () => {};
   w.HTMLElement.prototype.scrollIntoView = () => {};
   w.console.error = () => {};
-  w.supabase = { createClient() {
+  w.supabase = { createClient(_url,_key,settings) {
+    w.__sdkFetch=settings.global.fetch;
     clients++;
-    return { auth: { getSession: async () => ({ data: { session: null } }), signOut: async () => ({ error: null }) },
-      from(table) { const q = { select() { return q; }, insert(records) { w.__insertPayload=records; w.__insertCalls=(w.__insertCalls||0)+1;return q; }, order() { return q; }, then(resolve, reject) { return Promise.resolve().then(async () => { await pause(); return failed ? { data: null, error: new Error('Failed to fetch') } : { data: ({ fuentes, limites, inspecciones })[table] || [], error: null }; }).then(resolve, reject); } }; return q; }
+    return { auth: { getSession: async () => ({ data: { session: options.user ? { user:options.user } : null } }), onAuthStateChange(callback) { w.__emitAuth=(event,user)=>callback(event,user?{user}:null);return {data:{subscription:{unsubscribe(){}}}}; }, signOut: async () => ({ error: null }) },
+      from(table) { let first=0,last=Infinity;const filters=[];const q = { select() { return q; }, range(from,to) { first=from;last=to;return q; }, eq(column,value) { filters.push(r=>r[column]===value);return q; }, in(column,values) { filters.push(r=>values.includes(r[column]));return q; }, insert(records) { w.__insertPayload=records; w.__insertCalls=(w.__insertCalls||0)+1;return q; }, order() { return q; }, then(resolve, reject) { return Promise.resolve().then(async () => { await pause(); return failed ? { data: null, error: new Error('Failed to fetch') } : { data: (({ fuentes, limites, inspecciones, evidencias_fuente:options.evidence||[] })[table] || []).filter(r=>filters.every(f=>f(r))).slice(first,last+1), error: null }; }).then(resolve, reject); } }; return q; }
     };
   } };
-  evaluate('const SIDMap = { init(){}, isInitialized:()=>true, invalidateSize(){}, render(){}, focusFuente(id){window.__focused=id;} };');
+  evaluate('const SIDMap = { init(){}, isInitialized:()=>true, invalidateSize(){}, render(sources){window.__mapSources=sources;}, focusFuente(id){window.__focused=id;} };');
   for (const file of ['config', 'db', 'auth', 'guide', 'inspections', 'export', 'chart', 'workflows', 'ui']) evaluate(fs.readFileSync(`js/${file}.js`, 'utf8'));
+  if(options.beforeInit)evaluate(options.beforeInit);
   const init = evaluate('UI.init()');
   return { dom, w, evaluate, init, recover: () => { failed = false; }, clients: () => clients };
 }
@@ -182,4 +184,143 @@ test('measurement guard prevents duplicate submits while a write is in progress'
   assert.equal(a.w.__writes,1);a.w.__resolveWrite();
   while(d.getElementById('btnGuardarInspeccion').disabled) await pause();
   a.dom.window.close();
+});
+
+test('profile opens on the first click before photos resolve and shares repeated requests', async () => {
+  const a=app(),d=a.w.document;await a.init;
+  a.evaluate('Auth.user=()=>({id:"inspector"});DB.hasEvidenceStorage=()=>true;window.__photoCalls=0;DB.getEvidencias=()=>{window.__photoCalls++;return new Promise(resolve=>{window.__resolvePhotos=resolve;});}');
+  const open=d.querySelector('[data-open-profile="f0"]');open.click();
+  assert.equal(d.getElementById('modalExpediente').hidden,false);
+  assert.equal(d.getElementById('profileEvidenceGallery').getAttribute('aria-busy'),'true');
+  open.click();await pause();assert.equal(a.w.__photoCalls,1);
+  d.getElementById('btnCloseProfile').click();
+  a.w.__resolvePhotos([{url:'https://example.org/old.jpg',creado_en:'2026-11-13T10:00:00Z'}]);await pause();
+  assert.equal(d.getElementById('modalExpediente').hidden,true);
+  assert.equal(d.querySelector('#profileEvidenceGallery img'),null);
+  a.dom.window.close();
+});
+
+test('late photos from another source cannot overwrite the active profile', async () => {
+  const a=app(),d=a.w.document;await a.init;
+  a.evaluate('Auth.user=()=>({id:"inspector"});DB.hasEvidenceStorage=()=>true;window.__photos={};DB.getEvidencias=id=>new Promise(resolve=>{window.__photos[id]=resolve;})');
+  d.querySelector('[data-open-profile="f0"]').click();await pause();
+  d.querySelector('[data-open-profile="f1"]').click();await pause();
+  a.w.__photos.f1([{url:'https://example.org/current.jpg',creado_en:'2026-11-13T10:00:00Z'}]);await pause();
+  a.w.__photos.f0([{url:'https://example.org/stale.jpg',creado_en:'2026-11-13T10:00:00Z'}]);await pause();
+  assert.equal(d.getElementById('profileTitle').textContent,'Estación 1');
+  assert.equal(d.querySelector('#profileEvidenceGallery img').src,'https://example.org/current.jpg');
+  assert.equal(d.getElementById('profileEvidenceGallery').getAttribute('aria-busy'),'false');
+  a.dom.window.close();
+});
+
+test('photo failure keeps profile usable and offers a working retry', async () => {
+  const a=app(),d=a.w.document;await a.init;
+  a.evaluate('Auth.user=()=>({id:"inspector"});DB.hasEvidenceStorage=()=>true;DB.getEvidencias=async()=>{throw Error("Timeout")}');
+  d.querySelector('[data-open-profile="f0"]').click();await pause();
+  assert.equal(d.getElementById('modalExpediente').hidden,false);
+  assert.equal(d.querySelectorAll('#profileHistory tbody tr').length,5);
+  const retry=d.querySelector('#profileEvidenceGallery button');assert.match(retry.textContent,/Reintentar/);
+  a.evaluate('DB.getEvidencias=async()=>[{url:"https://example.org/recovered.jpg",creado_en:"2026-11-13T10:00:00Z"}]');
+  retry.click();await pause();
+  assert.equal(d.querySelector('#profileEvidenceGallery img').src,'https://example.org/recovered.jpg');
+  a.dom.window.close();
+});
+
+
+test('slow map photos do not hold the signed-in inventory in loading state', {timeout:1500}, async () => {
+  const a=app(false,[],{user:{id:'inspector',email:'inspector@example.org'},beforeInit:'DB.getEvidenciasMapa=()=>new Promise(resolve=>{window.__mapPhotos=resolve;})'});
+  await a.init;
+  assert.equal(a.w.document.getElementById('connectionNotice').hidden,true);
+  assert.equal(a.w.document.getElementById('statTotal').textContent,'12');
+  a.w.__mapPhotos({f0:'https://example.org/photo.jpg'});await pause();
+  assert.equal(a.w.__mapSources[0]._fotoMapa,'https://example.org/photo.jpg');
+  a.dom.window.close();
+});
+
+test('refresh preserves the selected source and analytical parameter', async () => {
+  const a=app(),d=a.w.document;await a.init;
+  d.getElementById('fFuente').value='f2';d.getElementById('fFuente').dispatchEvent(new a.w.Event('change'));
+  d.getElementById('fParametro').value='Turbidez';d.getElementById('fParametro').onchange();
+  a.w.dispatchEvent(new a.w.Event('online'));await pause();await pause();await pause();await pause();
+  assert.equal(d.getElementById('fFuente').value,'f2');assert.equal(d.getElementById('fParametro').value,'Turbidez');
+  a.dom.window.close();
+});
+
+test('session changes disable writes and discard late private map thumbnails', async () => {
+  const a=app(false,[],{user:{id:'inspector',email:'inspector@example.org'},beforeInit:'DB.getEvidenciasMapa=()=>new Promise(resolve=>{window.__mapPhotos=resolve;});DB.getEvidencias=async()=>[]'}),d=a.w.document;await a.init;
+  d.querySelector('[data-open-profile="f0"]').click();await pause();
+  a.w.__emitAuth('SIGNED_OUT',null);await pause();
+  assert.equal(d.getElementById('modalExpediente').hidden,true);
+  assert.equal(d.getElementById('btnGuardarInspeccion').disabled,true);
+  assert.equal(d.getElementById('profileEvidenceGallery').children.length,0);
+  a.w.__mapPhotos({f0:'https://example.org/private.jpg'});await pause();
+  assert.ok(a.w.__mapSources.every(f=>!f._fotoMapa));a.dom.window.close();
+});
+
+test('paginated reads retain every inspection beyond the first API response', async () => {
+  const extra=Array.from({length:1100},(_,n)=>({id:'large'+n,fuente_id:'f0',fecha:'2026-11-13T10:00:00Z',parametro:'DBO5',matriz:'agua',unidad:'mg/L',valor:20,estado:'bueno'}));
+  const a=app(false,extra);await a.init;
+  assert.equal((await a.evaluate('DB.getInspecciones()')).length,1115);
+  assert.match(a.w.document.getElementById('paginacionHistorico').textContent,/1115/);
+  a.dom.window.close();
+});
+
+test('one unavailable private photo does not hide the rest of the evidence', async () => {
+  const a=app(false,[],{evidence:[{id:'photo1',fuente_id:'f0',photo_url:'https://example.org/valid.jpg'},{id:'photo2',fuente_id:'f0',ruta_archivo:'missing.jpg'}]});await a.init;
+  a.evaluate('DB.client().storage={from:()=>({createSignedUrl:async()=>{throw Error("Unavailable")}})}');
+  const photos=await a.evaluate('DB.getEvidencias("f0")');assert.equal(photos.length,2);assert.equal(photos[0].url,'https://example.org/valid.jpg');assert.equal(photos[1].url,null);
+  a.dom.window.close();
+});
+
+test('closing a profile during photo upload cannot reopen it or submit twice', async () => {
+  const a=app(),d=a.w.document;await a.init;
+  a.evaluate('Auth.user=()=>({id:"inspector"});DB.getEvidencias=async()=>[];DB.getEvidenciasMapa=async()=>({});window.__uploads=0;DB.addEvidencia=()=>{window.__uploads++;return new Promise(resolve=>{window.__finishUpload=resolve;})}');
+  d.querySelector('[data-open-profile="f0"]').click();await pause();
+  d.getElementById('profilePhotoUrl').value='https://example.org/photo.jpg';
+  const form=d.getElementById('profileEvidenceForm');form.dispatchEvent(new a.w.Event('submit',{cancelable:true}));form.dispatchEvent(new a.w.Event('submit',{cancelable:true}));
+  assert.equal(a.w.__uploads,1);d.getElementById('btnCloseProfile').click();a.w.__finishUpload();await pause();await pause();await pause();
+  assert.equal(d.getElementById('modalExpediente').hidden,true);a.dom.window.close();
+});
+
+test('CSV keeps the newest file and enables save after signing in', async () => {
+  const a=app(),d=a.w.document;await a.init;
+  const input=d.getElementById('csvFile');let oldResolve;
+  const csv=name=>'fuente,medio,parametro,valor,unidad,fecha,responsable,referencia\n'+name+',agua,Turbidez,12,NTU,2026-11-13T09:00:00-05:00,Laboratorio,https://example.org/informe';
+  Object.defineProperty(input,'files',{configurable:true,value:[{size:100,text:()=>new Promise(resolve=>{oldResolve=resolve;})}]});input.dispatchEvent(new a.w.Event('change'));
+  Object.defineProperty(input,'files',{configurable:true,value:[{size:100,text:async()=>csv('Estación 1')}]});input.dispatchEvent(new a.w.Event('change'));await pause();
+  oldResolve(csv('Estación 0'));await pause();
+  assert.match(d.getElementById('csvPreview').textContent,/Estación 1/);assert.doesNotMatch(d.getElementById('csvPreview').textContent,/Estación 0/);
+  assert.equal(d.getElementById('csvCommit').disabled,true);a.w.__emitAuth('SIGNED_IN',{id:'inspector'});await pause();
+  assert.equal(d.getElementById('csvCommit').disabled,false);a.dom.window.close();
+});
+
+test('failed logout reports failure and preserves the session for retry', async () => {
+  const a=app(false,[],{user:{id:'inspector'},beforeInit:'DB.getEvidenciasMapa=async()=>({})'});await a.init;
+  a.evaluate('DB.client().auth.signOut=async()=>({error:Error("Network error")})');
+  await assert.rejects(a.evaluate('Auth.logout()'),/No se pudo cerrar/);
+  assert.equal(a.evaluate('Auth.user().id'),'inspector');a.dom.window.close();
+});
+
+test('data request timeout still applies while the response body is loading', async () => {
+  const a=app();await a.init;let abort;
+  const original=a.w.setTimeout;
+  a.w.setTimeout=(fn,delay,...args)=>delay===10000?(abort=fn,0):original(fn,delay,...args);
+  a.w.fetch=async(_input,{signal})=>({body:{},arrayBuffer:()=>new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(new a.w.DOMException('Timeout','AbortError')),{once:true}))});
+  const request=a.w.__sdkFetch('https://example.org/slow');await pause();abort();
+  await assert.rejects(request,/Timeout/);a.w.setTimeout=original;a.dom.window.close();
+});
+
+test('contact does not submit twice and recovers after a network failure', async () => {
+  const a=app(),d=a.w.document;await a.init;let calls=0,reject;
+  a.w.fetch=()=>{calls++;return new Promise((_resolve,fail)=>{reject=fail;});};
+  const form=d.getElementById('contactForm');
+  for(const [field,value] of Object.entries({nombre:'Persona Apellido',email:'persona@example.org',tipo:'Comentario',celular:'60001234',comentario:'Comentario de revisión del sitio.'})){
+    const el=form.elements.namedItem(field);if(el)el.value=value;
+  }
+  const email=form.querySelector('[type="email"]');email.value='persona@example.org';
+  form.dispatchEvent(new a.w.Event('submit',{cancelable:true}));form.dispatchEvent(new a.w.Event('submit',{cancelable:true}));
+  assert.equal(calls,1);reject(Error('Offline'));await pause();
+  assert.equal(form.querySelector('[type="submit"]').disabled,false);
+  assert.match(d.getElementById('contactFormStatus').textContent,/No pudimos/);
+  assert.equal(form.elements.namedItem('nombre').value,'Persona Apellido');a.dom.window.close();
 });

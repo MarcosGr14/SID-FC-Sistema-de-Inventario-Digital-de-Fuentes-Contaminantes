@@ -2,6 +2,21 @@
 const Auth = (() => {
   const SESSION_KEY = "sidfc_session";
   let currentUser = null;
+  let watching = false;
+  const listeners = new Set();
+  function setUser(user) {
+    currentUser = user || null;
+    setTimeout(() => listeners.forEach(listener => listener(currentUser)), 0);
+  }
+  function watch() {
+    if (watching || !isSupabase()) return;
+    DB.client().auth.onAuthStateChange((_event, session) => setUser(session?.user));
+    watching = true;
+  }
+  function onChange(listener) {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  }
 
   function isSupabase() {
     return SID_CONFIG.SUPABASE_READY;
@@ -9,8 +24,10 @@ const Auth = (() => {
 
   async function restore() {
     if (isSupabase()) {
-      const { data } = await DB.client().auth.getSession();
-      currentUser = data?.session?.user || null;
+      watch();
+      const { data, error } = await DB.client().auth.getSession();
+      if (error) throw error;
+      setUser(data?.session?.user);
       return currentUser;
     }
     const raw = sessionStorage.getItem(SESSION_KEY);
@@ -21,11 +38,12 @@ const Auth = (() => {
   async function login(email, password) {
     if (isSupabase()) {
       const client = DB.client();
-      const { data, error } = await client.auth.signInWithPassword({ email, password });
+      watch();
+      const { data, error } = await client.auth.signInWithPassword({ email: email.trim(), password });
       if (error) throw new Error(error.status === 400 || error.status === 401
         ? "El correo o la contraseña no son correctos."
         : "No se pudo conectar con el servicio de acceso. Revisa la conexión e inténtalo de nuevo.");
-      currentUser = data.user;
+      setUser(data.user);
       return currentUser;
     }
 
@@ -40,16 +58,17 @@ const Auth = (() => {
   }
 
   async function logout() {
-    currentUser = null;
-    sessionStorage.removeItem(SESSION_KEY);
     if (isSupabase()) {
-      await DB.client().auth.signOut({ scope: "local" });
+      const { error } = await DB.client().auth.signOut({ scope: "local" });
+      if (error) throw new Error("No se pudo cerrar la sesión. Revisa la conexión e inténtalo de nuevo.");
     }
+    sessionStorage.removeItem(SESSION_KEY);
+    setUser(null);
   }
 
   function user() {
     return currentUser;
   }
 
-  return { restore, login, logout, user };
+  return { restore, login, logout, user, onChange };
 })();

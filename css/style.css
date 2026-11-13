@@ -731,11 +731,12 @@ h4{font-size:.9rem; margin:0 0 .6rem; color:var(--ink-600);}
   #tablaHistorico{min-width:520px}
 }
 .map-source-photo{display:block;width:100%;max-width:220px;height:124px;margin:.55rem 0;border-radius:10px;object-fit:cover;border:1px solid #dce5df}
-.leaflet-tooltip.map-hover-tooltip{padding:0;border:0;background:transparent;box-shadow:none;white-space:normal}
+.leaflet-tooltip.map-hover-tooltip{width:min(280px,calc(100vw - 64px));padding:0;border:0;background:transparent;box-shadow:none;white-space:normal;box-sizing:border-box;pointer-events:none}
 .leaflet-tooltip.map-hover-tooltip:before{display:none}
-.map-hover-card{display:flex;align-items:center;gap:10px;max-width:260px;padding:8px 10px;border:1px solid #dfe8e1;border-radius:12px;background:#fff;color:#173d2d;box-shadow:0 8px 24px rgba(18,32,26,.2);font:600 .8rem/1.35 Inter,sans-serif}
-.map-hover-photo{width:52px;height:44px;flex:0 0 52px;border-radius:7px;object-fit:cover}
-@media(max-width:700px){.map-hover-card{max-width:220px;font-size:.74rem}.map-hover-photo{width:46px;height:40px;flex-basis:46px}.map-source-photo{max-width:190px;height:108px}}
+.map-hover-card{display:flex;align-items:center;gap:10px;width:100%;min-width:0;box-sizing:border-box;padding:8px 10px;border:1px solid #dfe8e1;border-radius:12px;background:#fff;color:#173d2d;box-shadow:0 8px 24px rgba(18,32,26,.2);font:600 .8rem/1.35 Inter,sans-serif}
+.map-hover-card__body{flex:1;min-width:0;overflow-wrap:anywhere;word-break:normal}.map-hover-card__body strong,.map-hover-card__body span{display:block}.map-hover-card__body strong{font-size:.84rem;line-height:1.4}.map-hover-card__body span{margin-top:4px;font-size:.75rem;font-weight:500;line-height:1.4}
+.map-hover-photo{display:block;width:52px;height:44px;flex:0 0 52px;border-radius:7px;object-fit:cover}
+@media(max-width:700px){.leaflet-tooltip.map-hover-tooltip{width:min(244px,calc(100vw - 64px))}.map-hover-card{font-size:.8rem}.map-hover-photo{width:46px;height:40px;flex-basis:46px}.map-source-photo{max-width:190px;height:108px}}
 .history-map-button{max-width:220px;padding:0;border:0;background:none;color:var(--forest-700);font:600 .88rem/1.4 var(--font-body);text-align:left;cursor:pointer;overflow-wrap:anywhere}@media (hover:hover) and (pointer:fine){
 .history-map-button:hover{text-decoration:underline;color:var(--leaf-500)}}
 .history-map-button:focus-visible{outline:2px solid var(--leaf-500);outline-offset:3px;border-radius:4px}

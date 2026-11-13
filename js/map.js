@@ -86,10 +86,16 @@ const SIDMap = (() => {
         popup.appendChild(ultima);
       }
       marker.bindPopup(popup);
+      marker.on("popupopen", () => marker.closeTooltip());
       const tooltip = document.createElement("div");
       tooltip.className = "map-hover-card";
-      const tooltipText = document.createElement("span");
-      tooltipText.textContent = `${f.nombre} · ${estadoTxt}`;
+      const tooltipText = document.createElement("div");
+      tooltipText.className = "map-hover-card__body";
+      const tooltipName = document.createElement("strong");
+      tooltipName.textContent = f.nombre;
+      const tooltipState = document.createElement("span");
+      tooltipState.textContent = estadoTxt;
+      tooltipText.append(tooltipName, tooltipState);
       tooltip.append(tooltipText);
       if (f._fotoMapa) {
         const thumb = document.createElement("img"); thumb.src = f._fotoMapa; thumb.alt = ""; thumb.className = "map-hover-photo"; thumb.loading = "lazy"; thumb.addEventListener("error", () => thumb.remove(), { once: true }); tooltip.prepend(thumb);
@@ -101,6 +107,31 @@ const SIDMap = (() => {
 
     if(!fitted&&markersBySource.size)fitVisible();
     return visibles.length;
+  }
+
+  function updatePhotos(fuentes) {
+    for (const fuente of fuentes) {
+      const marker = markersBySource.get(String(fuente.id));
+      if (!marker) continue;
+      const popup = marker.getPopup()?.getContent();
+      const tooltip = marker.getTooltip()?.getContent();
+      const url = fuente._fotoMapa;
+      for (const [container, className] of [[popup, "map-source-photo"], [tooltip, "map-hover-photo"]]) {
+        if (!container?.querySelector) continue;
+        const previous = container.querySelector(`.${className}`);
+        if (previous?.getAttribute("src") === url) continue;
+        previous?.remove();
+        if (!url) continue;
+        const image = document.createElement("img");
+        image.src = url; image.className = className; image.loading = "lazy";
+        image.alt = className === "map-source-photo" ? `Fotografía de ${fuente.nombre}` : "";
+        image.addEventListener("error", () => image.remove(), { once:true });
+        if (className === "map-hover-photo") container.prepend(image);
+        else container.children[2]?.after(image);
+      }
+      if (marker.isTooltipOpen()) marker.getTooltip().update();
+      if (marker.isPopupOpen()) marker.getPopup().update();
+    }
   }
 
   function enablePlacement(cb) {
@@ -149,5 +180,5 @@ const SIDMap = (() => {
     previewMarker = L.marker(latlng, { title: "Ubicación seleccionada" }).addTo(markersLayer);
   }
 
-  return { init, isInitialized: () => Boolean(map), render, enablePlacement, disablePlacement, setMarkerPreview, invalidateSize, focus, focusFuente, fitVisible };
+  return { init, isInitialized: () => Boolean(map), render, enablePlacement, disablePlacement, setMarkerPreview, invalidateSize, focus, focusFuente, fitVisible, updatePhotos };
 })();

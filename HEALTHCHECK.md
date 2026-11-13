@@ -31,3 +31,36 @@ La revisión automática de diseño señaló metadatos demasiado pequeños y bor
 Las mediciones académicas conservan su procedencia en la ficha técnica. Los lugares reales no acreditan una estación oficial ni la exactitud de sus coordenadas. La interfaz distingue coordenadas de referencia pendientes de confirmación en campo.
 
 Las guías OMS y CCME se muestran con su ámbito de uso y no se aplican automáticamente como límites legales de Panamá. Los informes externos necesitan una referencia verificable; sin criterio específico quedan sin clasificación. La importación transcribe datos proporcionados por el inspector y no verifica por sí sola su autenticidad.
+
+## Corrección de tarjetas y apertura · 13 de noviembre de 2026
+
+La tarjeta emergente del mapa tiene un ancho definido, miniatura sin compresión y nombre/estado separados dentro de una columna flexible. Se oculta al abrir el popup y no intercepta clics.
+
+El expediente abre antes de consultar fotografías y calcula el gráfico con el diálogo visible. Las solicitudes simultáneas de imágenes del mismo sitio comparten consulta; las respuestas de expedientes cerrados o reemplazados se descartan. Los errores muestran una opción de reintento sin bloquear los datos de la fuente.
+
+Las 17 pruebas funcionales pasan, incluidas carga lenta, clics repetidos, cambio de fuente durante la carga y recuperación tras un fallo de fotografías. La validación de esta corrección se realizó con DOM y respuestas controladas; la inspección visual en navegador queda pendiente.
+
+## Revisión de carga y sesión · 13 de noviembre de 2026
+
+### Servicio publicado
+
+La página de Netlify respondió HTTP 200 y los 17 recursos de interfaz consultados respondieron correctamente. La versión publicada de `js/ui.js` era `20261112.4`; la disponibilidad de las correcciones en producción depende del despliegue del commit de esta revisión en Netlify.
+
+La API pública de Supabase devolvió 8 fuentes, 96 mediciones y 16 criterios. También se ejecutaron las consultas del cliente modificado con la biblioteca Supabase incluida en el repositorio: las tres lecturas completaron correctamente. No se modificó la base de datos ni se enviaron mensajes reales desde Contacto.
+
+### Correcciones
+
+- Las miniaturas del mapa cargan después del inventario y se insertan sin reemplazar los marcadores, el popup ni el botón de expediente.
+- Las actualizaciones conservan fuente y parámetro seleccionados; las respuestas antiguas no reemplazan datos más recientes.
+- La sesión escucha los eventos de Supabase. Al cambiar de usuario o cerrar sesión se retiran fotografías privadas y se descartan respuestas pendientes.
+- Las consultas de fuentes, mediciones, criterios y evidencias usan lotes ordenados para evitar el recorte del historial en una única respuesta de la API.
+- Una fotografía privada no disponible conserva el resto de la galería.
+- La subida de evidencia evita doble envío, captura el sitio destinatario y no reabre un expediente cerrado ni informa como fallida una escritura confirmada cuyo refresco posterior falló.
+- La importación CSV descarta lecturas tardías de archivos anteriores y actualiza el botón al iniciar sesión.
+- El tiempo máximo de consulta también cubre la descarga del cuerpo de la respuesta. Contacto tiene límite de espera y evita envíos repetidos; el acceso tiene protección contra doble envío y muestra errores al cerrar sesión.
+
+### Validación
+
+La suite incluye 28 pruebas: conexión fallida y recuperación, historial de 1.115 mediciones, cargas lentas, resultados fuera de orden, cierre durante cargas y subidas, cambios de sesión, galería parcial, importación CSV, descarga interrumpida, contacto y actualización de fotos con Leaflet real en DOM. Las pruebas de red fallida usan respuestas controladas y no envían datos a terceros.
+
+La inspección visual interactiva de esta revisión y las pruebas físicas en móvil/tableta quedan pendientes. Las comprobaciones HTTP no equivalen a una sesión autenticada completa en el sitio publicado.
