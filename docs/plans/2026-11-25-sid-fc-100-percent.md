@@ -130,7 +130,7 @@ Trabajar por fase en rama revisable y aplicar migraciones aditivas, con copias d
 - [~] Fase 5 — fotografía/cámara (UI, optimización y Storage; falta verificar Storage real y permisos de cámara)
 - [x] Fase 6 — gráficas (línea, puntos y barras implementadas; falta validar datos reales representativos)
 - [~] Fase 7 — rendimiento y aceptación (regresión aprobada; faltan mediciones de carga y datos reales)
-- [~] Fase 8 — `.gitignore`, README y entrega (archivos listos; falta publicar y revisar README en GitHub)
+- [~] Fase 8 — `.gitignore`, README y entrega (actualizados en la rama y PR borrador #1; falta revisar/validar antes de fusionar)
 
 ### Avance de implementación
 
