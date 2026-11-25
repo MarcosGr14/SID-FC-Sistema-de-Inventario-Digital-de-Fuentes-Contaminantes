@@ -1,6 +1,6 @@
 # 📐 Criterios de evaluación ambiental
 
-**Revisión documental: 13 de noviembre de 2026.** Los valores son referencias por parámetro y contexto; una comparación de SID-FC no certifica cumplimiento legal, potabilidad o aptitud de un sitio.
+**Revisión documental: 25 de noviembre de 2026.** Los valores son referencias por parámetro y contexto; una comparación de SID-FC no certifica cumplimiento legal, potabilidad o aptitud de un sitio.
 
 ## Cómo seleccionar un criterio
 
@@ -28,6 +28,34 @@ La consulta **Criterios de evaluación**, debajo del mapa, permite elegir medio,
 | Sólidos disueltos totales | ≤ 500 mg/L |
 
 Estos límites son del **efluente**, no del río receptor. La modificación de 2025 consultada cambia el símbolo del nitrato en la tabla y las disposiciones de muestreo; no cambia los límites numéricos de esta lista. Para una evaluación formal hay que revisar muestra simple/compuesta, acreditación, incertidumbre, excepciones y permisos. Se corrigieron DQO 150 → 100 y SST 100 → 35 mg/L en el registro de parámetros.
+
+El catálogo incorpora además estos parámetros de la tabla 1 de DGNTI-COPANIT 35-2019, con sus máximos publicados. **No son aplicables de forma universal:** verificar para cada establecimiento el CIIU y el Anexo A, el permiso, la forma química y el método antes de seleccionar el perfil. El nombre del parámetro y la unidad deben coincidir con el informe del laboratorio.
+
+| Parámetro | Máximo | Parámetro | Máximo |
+| --- | ---: | --- | ---: |
+| Ácido bórico | 2 mg/L | Aluminio | 5 mg/L |
+| Arsénico | 0,5 mg/L | Cadmio | 0,01 mg/L |
+| Calcio | 1000 mg/L | Cianuro total | 0,2 mg/L |
+| Cloro residual libre | 1,5 mg/L | Cloruros | 400 mg/L |
+| Cobre | 1 mg/L | Coliformes termotolerantes | 500 NMP o UFC/100 mL |
+| Coliformes totales | 1000 NMP o UFC/100 mL | Color verdadero | 300 UC |
+| Compuestos fenólicos | 0,5 mg/L | Cromo hexavalente | 0,05 mg/L |
+| Cromo total | 5 mg/L | Enterococos | 100 NMP o UFC/100 mL |
+| *E. coli* | 250 NMP o UFC/100 mL | Estaño | 3 mg/L |
+| Fósforo total | 10 mg/L | Hierro total | 5 mg/L |
+| Manganeso | 0,5 mg/L | Mercaptanos | 0,02 mg/L |
+| Mercurio | 0,001 mg/L | Metanol | 4,1 mg/L |
+| Níquel | 0,2 mg/L | Nitratos (NO₃-N) | 10 mg/L |
+| Nitrógeno amoniacal | 3 mg/L | Nitrógeno total | 15 mg/L |
+| Organoclorados | 1,5 mg/L | Organofosforados | 1,5 mg/L |
+| Pentaclorofenol | 0,009 mg/L | Plomo | 0,05 mg/L |
+| Sodio | 35 % | Sólidos sedimentables | 15 mL/L |
+| Sulfatos | 1000 mg/L | Sulfuros | 1 mg/L |
+| Surfactantes (SAAM) | 5 mg/L | Tolueno | 0,7 mg/L |
+| Tricloroetano | 0,04 mg/L | Triclorometano | 0,02 mg/L |
+| Xileno | 0,05 mg/L | Zinc | 3 mg/L |
+
+Al 25 de noviembre de 2026, MICI mantiene en consulta pública la segunda revisión de DGNTI-35. El borrador de consulta no reemplaza la norma vigente y no se usa para cambiar los valores del catálogo. [Consulta oficial y borrador](https://mici.gob.pa/dgnti-consulta-publica/).
 
 ## 🏊 Agua continental de uso recreativo
 

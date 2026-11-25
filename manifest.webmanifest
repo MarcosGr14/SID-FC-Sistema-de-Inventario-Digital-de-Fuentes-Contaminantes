@@ -1,0 +1,26 @@
+{
+  "id": "./",
+  "name": "SID-FC · Inventario Ambiental",
+  "short_name": "SID-FC",
+  "description": "Inventario y seguimiento de fuentes contaminantes en Panamá.",
+  "lang": "es-PA",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f8f5",
+  "theme_color": "#0f3d2c",
+  "icons": [
+    {
+      "src": "assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

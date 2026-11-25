@@ -116,7 +116,7 @@ create policy "SID-FC borrado de evidencias propias" on storage.objects
     bucket_id = 'sidfc-evidencias' and owner_id = (select auth.uid()::text)
   );
 
-grant select on table public.fuentes, public.inspecciones, public.limites to anon, authenticated;
+grant select on table public.fuentes, public.inspecciones, public.limites to authenticated;
 grant insert on table public.fuentes, public.inspecciones to authenticated;
 
 alter table public.evidencias_fuente

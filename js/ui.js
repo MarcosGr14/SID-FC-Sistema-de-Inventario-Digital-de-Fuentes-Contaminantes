@@ -52,6 +52,43 @@ const UI = (() => {
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
     })[char]);
   }
+  async function optimizarFoto(file) {
+    if (!file) return null;
+    if (!file.type.startsWith("image/")) throw new Error("Selecciona un archivo de imagen.");
+    if (file.size > 15 * 1024 * 1024) throw new Error("La foto original supera 15 MB.");
+    const bitmap = typeof createImageBitmap === "function"
+      ? await createImageBitmap(file)
+      : await new Promise((resolve, reject) => {
+        const image = new Image(), url = URL.createObjectURL(file);
+        image.onload = () => { URL.revokeObjectURL(url); resolve(image); };
+        image.onerror = () => { URL.revokeObjectURL(url); reject(new Error("No se pudo leer la imagen; prueba con JPG o PNG.")); };
+        image.src = url;
+      });
+    const scale = Math.min(1, 1600 / Math.max(bitmap.width || bitmap.naturalWidth, bitmap.height || bitmap.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round((bitmap.width || bitmap.naturalWidth) * scale));
+    canvas.height = Math.max(1, Math.round((bitmap.height || bitmap.naturalHeight) * scale));
+    canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+    const optimized = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.82));
+    if (!optimized) throw new Error("No se pudo procesar la fotografía.");
+    if (optimized.size > 5 * 1024 * 1024) throw new Error("La fotografía optimizada supera 5 MB.");
+    return new File([optimized], `${file.name.replace(/\.[^.]+$/, "") || "evidencia"}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
+  }
+
+  function enlazarVistaPrevia(inputId, previewId) {
+    const input = document.getElementById(inputId), preview = document.getElementById(previewId);
+    input.addEventListener("change", () => {
+      if (preview.dataset.url) URL.revokeObjectURL(preview.dataset.url);
+      if (!input.files?.[0]) { preview.hidden = true; preview.removeAttribute("src"); return; }
+      const url = URL.createObjectURL(input.files[0]);
+      preview.dataset.url = url; preview.src = url; preview.hidden = false;
+    });
+    input.form?.addEventListener("reset", () => setTimeout(() => {
+      if (preview.dataset.url) URL.revokeObjectURL(preview.dataset.url);
+      delete preview.dataset.url; preview.hidden = true; preview.removeAttribute("src");
+    }, 0));
+  }
   function fuentesConEstado() {
     return fuentes.map((f) => {
       const propias = inspecciones
@@ -318,8 +355,8 @@ const UI = (() => {
     const intervalo = r.criterio_detalle ? `<p>${escapeHTML(r.criterio_detalle.contexto)}</p><p>${escapeHTML(r.criterio_detalle.norma)}</p><p>Interpretación: ${escapeHTML(Inspections.interpretar(r).etiqueta)}</p><p>${escapeHTML(r.referencia_criterio||"")}</p>` : criterio ? `<p>Criterio aplicado: ${r.criterio_minimo == null ? "sin mínimo" : escapeHTML(r.criterio_minimo)} – ${r.criterio_maximo == null ? "sin máximo" : escapeHTML(r.criterio_maximo)} ${escapeHTML(r.unidad || "")}</p><p>${escapeHTML(r.referencia_criterio || "")}</p>` : "";
     return `<details class="technical-details"><summary>Ficha técnica</summary>${intervalo}${r.observaciones ? `<p>${escapeHTML(r.observaciones)}</p>` : ""}</details>`;
   }
-  function dibujarGrafico(rows) {
-    SIDChart.render(document.getElementById("profileChart"),rows.map(row=>({...row,estado:estadoDe(row)})));
+  function dibujarGrafico(rows, mode = "line") {
+    SIDChart.render(document.getElementById("profileChart"),rows.map(row=>({...row,estado:estadoDe(row)})),mode);
   }
 
   async function abrirExpediente(id) {
@@ -351,7 +388,7 @@ const UI = (() => {
     const updateGraph = () => {
       const [matriz, parametro, unidad] = (select.value || "").split("|");
       const same = rows.filter((r) => r.matriz === matriz && r.parametro === parametro && (r.unidad || "") === unidad);
-      dibujarGrafico(same);
+      dibujarGrafico(same, document.getElementById("profileChartMode").value);
       const first = same[0], last = same.at(-1);
       const trend = document.getElementById("profileTrend");
       if (!first || !last || first === last) trend.textContent = "Se requieren al menos dos mediciones comparables para observar una tendencia.";
@@ -364,7 +401,9 @@ const UI = (() => {
       document.getElementById("profileChartNote").textContent = fuente.esDemostracion ? "Evaluación académica · criterios documentados en la ficha técnica." : "Las lecturas se comparan por parámetro y unidad; confirma el método y el criterio aplicable.";
     };
     openModal("modalExpediente");
-    select.onchange = updateGraph; updateGraph();
+    select.onchange = updateGraph;
+    document.getElementById("profileChartMode").onchange = updateGraph;
+    updateGraph();
     const lecturasPerfil = [...rows].reverse();
     document.querySelector("#profileHistory tbody").innerHTML = lecturasPerfil.slice((paginaHistorialPerfil - 1) * HISTORIAL_PERFIL_POR_PAGINA, paginaHistorialPerfil * HISTORIAL_PERFIL_POR_PAGINA).map((r) => `<tr><td>${fmtFecha(r.fecha)}</td><td>${escapeHTML(titulo(r.matriz))} · ${escapeHTML(r.parametro)}</td><td>${escapeHTML(r.valor)} ${escapeHTML(r.unidad || "")}</td><td>${pillEstado(estadoDe(r),Inspections.interpretar(r).etiqueta)}</td><td>${escapeHTML(titulo(r.origen_dato || "campo"))}${r.referencia_dato || r.metodo_muestreo ? `<details class="technical-details"><summary>Ver procedencia</summary><p>${escapeHTML(r.referencia_dato || "")}</p><p>${escapeHTML(r.metodo_muestreo || "")}</p></details>` : ""}</td><td>${fichaTecnica(r)}</td></tr>`).join("") || '<tr><td colspan="6" class="table-empty">Aún no hay mediciones para esta fuente.</td></tr>';
     renderPaginacionLista("paginacionProfileHistory", lecturasPerfil.length, HISTORIAL_PERFIL_POR_PAGINA, paginaHistorialPerfil, (pagina) => { paginaHistorialPerfil = pagina; abrirExpediente(fuente.id); });
@@ -440,8 +479,10 @@ const UI = (() => {
   }
   async function refrescarDatos() {
     const version = ++versionDatos;
+    DB.beginPublicRead();
     const [nuevasFuentes, nuevasInspecciones] = await Promise.all([DB.getFuentes(), DB.getInspecciones()]);
     if (version !== versionDatos) return;
+    DB.savePublicRead(nuevasFuentes, nuevasInspecciones);
     versionFotos++;
     fuentes = nuevasFuentes.map((f) => ({ ...f, _fotoMapa:null, esDemostracion: /^\[DEMO\]\s*/i.test(f.nombre), ubicacion_original:f.ubicacion, ubicacion: typeof SIDWorkflows === "undefined" ? f.ubicacion : SIDWorkflows.compact(f), nombre: f.nombre.replace(/^\[DEMO\]\s*/i, "") }));
     inspecciones = nuevasInspecciones;
@@ -475,9 +516,9 @@ const UI = (() => {
       tag.textContent = nombreVisible;
       tag.title = u.email || "";
       btnLogin.textContent = "Cerrar sesión";
-      btnNuevaFuente.disabled = !datosDisponibles;
-      btnInsp.disabled = !datosDisponibles;
-      btnGuardar.disabled = !datosDisponibles;
+      btnNuevaFuente.disabled = !datosDisponibles || !navigator.onLine;
+      btnInsp.disabled = !datosDisponibles || !navigator.onLine;
+      btnGuardar.disabled = !datosDisponibles || !navigator.onLine;
       hint.hidden = true;
       const inspector = document.getElementById("fInspector");
       if (inspector && !inspector.value) {
@@ -544,7 +585,7 @@ const UI = (() => {
         return;
       }
       document.getElementById("demoNote").textContent = DB.mode() === "demo"
-        ? `Modo demo: usa ${SID_CONFIG.DEMO_USER.email} / ${SID_CONFIG.DEMO_USER.password}`
+        ? "Modo demostración: las fuentes y mediciones quedan en este dispositivo y no se publican."
         : "";
       openModal("modalLogin");
     });
@@ -582,6 +623,8 @@ const UI = (() => {
   }
 
   function wireFuenteModal() {
+    enlazarVistaPrevia("nfFoto", "nfFotoPreview");
+    if (!DB.hasEvidenceStorage()) document.getElementById("nfFoto").disabled = true;
     function abrirRegistroFuente(desdeInspeccion = false) {
       if (!Auth.user()) {
         abrirFuenteDespuesDelLogin = desdeInspeccion;
@@ -673,6 +716,7 @@ const UI = (() => {
       const tipo = document.getElementById("nfCategoria").value;
       const categoria_fuente = document.getElementById("nfCategoriaFuente").value;
       const ubicacion = document.getElementById("nfUbicacion").value.trim();
+      const foto = document.getElementById("nfFoto").files?.[0] || null;
       const lat = parseFloat(document.getElementById("nfLat").value);
       const lng = parseFloat(document.getElementById("nfLng").value);
       if (!nombre || !Number.isFinite(lat) || !Number.isFinite(lng) || lat < 7 || lat > 10 || lng < -83.5 || lng > -77) {
@@ -684,7 +728,11 @@ const UI = (() => {
       guardandoFuente = true;
       submit.disabled = true;
       try {
+        const fotoOptimizada = foto ? await optimizarFoto(foto) : null;
         const nuevaFuente = await DB.addFuente({ nombre, tipo, categoria_fuente, ubicacion, lat, lng });
+        let errorFoto = null;
+        if (fotoOptimizada) try { await DB.addEvidencia({ fuenteId: nuevaFuente.id, file: fotoOptimizada, descripcion: "Fotografía de la fuente" }); }
+        catch (error) { errorFoto = error; }
         const volverAInspeccion = regresarAInspeccionDespuesDeFuente;
         cerrarFuenteModal();
         try { await refrescarDatos(); }
@@ -695,7 +743,7 @@ const UI = (() => {
           document.querySelector('.tab[data-tab="inspeccion"]').click();
           document.getElementById("fInspector").focus();
         }
-        toast("Fuente registrada correctamente.");
+        toast(errorFoto ? `Fuente registrada. No se guardó la fotografía: ${errorFoto.message}` : "Fuente registrada correctamente.", Boolean(errorFoto));
       } catch (err) {
         errorEl.textContent = "No se pudo guardar: " + err.message;
         errorEl.hidden = false;
@@ -707,6 +755,8 @@ const UI = (() => {
   }
 
   function wireInspeccionForm() {
+    enlazarVistaPrevia("fFotoInspeccion", "fFotoInspeccionPreview");
+    if (!DB.hasEvidenceStorage()) document.getElementById("fFotoInspeccion").disabled = true;
     document.getElementById("btnRegistrarInspeccion").addEventListener("click", () => {
       document.querySelector('.tab[data-tab="inspeccion"]').click();
       document.querySelector("#sourcePicker summary")?.focus();
@@ -738,6 +788,7 @@ const UI = (() => {
       const origen_dato = document.getElementById("fOrigenDato").value;
       const metodo_muestreo = document.getElementById("fMetodo").value.trim();
       const referencia_dato = document.getElementById("fReferenciaDato").value.trim();
+      const fotoCampo = document.getElementById("fFotoInspeccion").files?.[0] || null;
 
       if (!fuente_id || !inspector || !Number.isFinite(valor) || !parametro || !fecha) {
         toast("Completa todos los campos obligatorios.", true);
@@ -786,7 +837,12 @@ const UI = (() => {
       guardandoMedicion = true;
       submit.disabled = true;
       try {
-        await DB.addInspeccion(registro);
+        const fotoOptimizada = fotoCampo ? await optimizarFoto(fotoCampo) : null;
+        const inspeccionGuardada = await DB.addInspeccion(registro);
+        if (fotoOptimizada) {
+          try { await DB.addEvidencia({ fuenteId: inspeccionGuardada.fuente_id, inspeccionId: inspeccionGuardada.id, file: fotoOptimizada, descripcion: "Fotografía de campo" }); }
+          catch (error) { e.target.reset(); try { await refrescarDatos(); } catch {} toast(`La medición se guardó, pero no la fotografía: ${error.message}`, true); return; }
+        }
         e.target.reset();
         document.getElementById("fReferenciaDato").required=false;
         document.getElementById("fFecha").value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -807,7 +863,7 @@ const UI = (() => {
         toast("No se pudo guardar la medición: " + err.message, true);
       } finally {
         guardandoMedicion = false;
-        submit.disabled = !Auth.user() || !datosDisponibles;
+        submit.disabled = !Auth.user() || !datosDisponibles || !navigator.onLine;
       }
     });
   }
@@ -962,7 +1018,7 @@ const UI = (() => {
   function wireHomeParallax() {
     const hero = document.querySelector(".home-hero");
     const image = hero?.querySelector(".home-hero__image");
-    if (!hero || !image || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!hero || !image || window.matchMedia("(prefers-reduced-motion: reduce)").matches || window.matchMedia("(max-width: 700px), (pointer: coarse)").matches) return;
     let queued = false;
     const update = () => {
       queued = false;
@@ -1127,7 +1183,15 @@ const UI = (() => {
     });
 
     document.getElementById("btnRetryConnection").addEventListener("click", cargarDatos);
-    window.addEventListener("online", cargarDatos);
+    window.addEventListener("online", () => { cargarDatos(); document.getElementById("btnGuardarInspeccion").disabled = !Auth.user() || !datosDisponibles; });
+    window.addEventListener("offline", () => {
+      document.getElementById("btnGuardarInspeccion").disabled = true;
+      const notice = document.getElementById("connectionNotice");
+      notice.hidden = false; notice.classList.add("is-error");
+      document.getElementById("connectionTitle").textContent = "Sin conexión";
+      document.getElementById("connectionMessage").textContent = "Consulta los últimos datos públicos guardados en este dispositivo. Registrar mediciones requiere conexión.";
+      document.getElementById("btnRetryConnection").hidden = true;
+    });
     await DB.init();
     await cargarDatos();
   }
@@ -1152,7 +1216,13 @@ const UI = (() => {
       datosDisponibles = true;
       poblarParametros();
       notice.hidden = true;
-      document.getElementById("dbModeTag").textContent = DB.mode() === "supabase" ? "Datos sincronizados" : "Demostración local";
+      const cacheTime = DB.publicCacheStatus();
+      document.getElementById("dbModeTag").textContent = cacheTime ? `Consulta pública guardada · ${new Date(cacheTime).toLocaleDateString("es-PA")}` : DB.mode() === "supabase" ? "Datos sincronizados" : "Demostración local";
+      if (!navigator.onLine) {
+        title.textContent = "Consulta sin conexión";
+        message.textContent = "Se muestran los últimos datos públicos guardados en este dispositivo. Registrar mediciones requiere conexión.";
+        notice.hidden = false; notice.classList.add("is-error");
+      }
     } catch (error) {
       datosDisponibles = false;
       title.textContent = "Servicio de datos no disponible";

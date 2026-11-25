@@ -7,6 +7,26 @@ const DB = (() => {
     evidencias: "sidfc_evidencias",
   };
   const CLEAN_START_KEY = "sidfc_clean_start_v1";
+  const PUBLIC_SOURCE_COLUMNS = "id,nombre,ubicacion,tipo,lat,lng,categoria_fuente,creado_en,publicado_en";
+  const PUBLIC_INSPECTION_COLUMNS = "id,fuente_id,matriz,parametro,valor,unidad,fecha,estado,origen_dato,metodo_muestreo,referencia_dato,criterio_minimo,criterio_maximo,referencia_criterio,criterio_id,criterio_detalle,creado_en,publicado_en";
+  const PUBLIC_CACHE_KEY = "sidfc_public_read_cache_v1";
+  const PUBLIC_CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+  let usingPublicCache = false;
+
+  function publicCacheRead() {
+    try {
+      const cached = JSON.parse(localStorage.getItem(PUBLIC_CACHE_KEY) || "null");
+      return cached && Date.now() - cached.savedAt < PUBLIC_CACHE_MAX_AGE ? cached : null;
+    } catch { return null; }
+  }
+
+  function publicCacheWrite(fuentes, inspecciones) {
+    if (Auth.user()) return;
+    const approvedSources = fuentes.filter(row => row.publicado_en);
+    const approvedIds = new Set(approvedSources.map(row => String(row.id)));
+    const approvedInspections = inspecciones.filter(row => row.publicado_en && approvedIds.has(String(row.fuente_id)));
+    try { localStorage.setItem(PUBLIC_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), fuentes: approvedSources, inspecciones: approvedInspections })); } catch { /* Storage may be full or disabled. */ }
+  }
 
   const LIMITES_DEFAULT = [
     { matriz: "agua", parametro: "DBO5",              limite: 50,  unidad: "mg/L" },
@@ -71,10 +91,10 @@ const DB = (() => {
 
   const isSupabase = () => SID_CONFIG.SUPABASE_READY;
 
-  async function allRows(table, column = "id", ascending = true, filter = query => query) {
+  async function allRows(table, column = "id", ascending = true, filter = query => query, columns = "*") {
     const rows = [], pageSize = 500;
     for (let offset = 0; ; offset += pageSize) {
-      let query = filter(client().from(table).select("*")).order(column, { ascending });
+      let query = filter(client().from(table).select(columns)).order(column, { ascending });
       if (column !== "id") query = query.order("id");
       const { data, error } = await query.range(offset, offset + pageSize - 1);
       if (error) throw error;
@@ -91,6 +111,12 @@ const DB = (() => {
       return isSupabase() ? "supabase" : "demo";
     },
 
+    publicCacheStatus() { return usingPublicCache ? publicCacheRead()?.savedAt || null : null; },
+    beginPublicRead() { usingPublicCache = false; },
+    savePublicRead(fuentes, inspecciones) {
+      if (isSupabase() && !usingPublicCache) publicCacheWrite(fuentes, inspecciones);
+    },
+
     async init() {
       if (!isSupabase()) {
         startClean();
@@ -100,7 +126,16 @@ const DB = (() => {
 
     async getFuentes() {
       if (isSupabase()) {
-        return allRows("fuentes", "nombre");
+        if (Auth.user()) return allRows("fuentes", "nombre", true, query => query, "*");
+        try {
+          const rows = await allRows("fuentes", "nombre", true, query => query, PUBLIC_SOURCE_COLUMNS);
+          usingPublicCache = false;
+          return rows;
+        } catch (error) {
+          const cache = publicCacheRead();
+          if (cache) { usingPublicCache = true; return cache.fuentes; }
+          throw error;
+        }
       }
       return readLS(LS_KEYS.fuentes);
     },
@@ -124,7 +159,16 @@ const DB = (() => {
 
     async getInspecciones() {
       if (isSupabase()) {
-        return allRows("inspecciones", "fecha", false);
+        if (Auth.user()) return allRows("inspecciones", "fecha", false, query => query, "*");
+        try {
+          const rows = await allRows("inspecciones", "fecha", false, query => query, PUBLIC_INSPECTION_COLUMNS);
+          usingPublicCache = false;
+          return rows;
+        } catch (error) {
+          const cache = publicCacheRead();
+          if (cache) { usingPublicCache = true; return cache.inspecciones; }
+          throw error;
+        }
       }
       return readLS(LS_KEYS.inspecciones).sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
     },

@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#0f3d2c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
 <title>SID-FC · Sistema de Inventario Digital de Fuentes Contaminantes</title>
 <meta name="description" content="Prototipo académico UTP — Inventario, georreferenciación e inspección de fuentes contaminantes en Panamá.">
 <link rel="icon" type="image/x-icon" href="favicon.ico">
@@ -11,11 +16,11 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
 <link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css"/>
 
-<link rel="stylesheet" href="css/style.css?v=20261113.4">
+<link rel="stylesheet" href="css/style.css?v=20261125.1">
 </head>
 <body>
 
@@ -58,7 +63,7 @@
 <main id="main" tabindex="-1">
   <section class="page-view home-page" id="page-home">
     <section class="home-hero" aria-labelledby="homeTitle">
-      <img class="home-hero__image" src="https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&amp;fit=crop&amp;w=2400&amp;q=85" alt="Bosque tropical" fetchpriority="high">
+      <img class="home-hero__image" src="https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&amp;fit=crop&amp;w=1600&amp;q=75" alt="Bosque tropical" fetchpriority="high" srcset="https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&amp;fit=crop&amp;w=768&amp;q=70 768w, https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&amp;fit=crop&amp;w=1280&amp;q=72 1280w, https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&amp;fit=crop&amp;w=1600&amp;q=75 1600w" sizes="100vw">
       <div class="home-hero__shade"></div>
       <div class="home-hero__content">
         <p class="eyebrow">Panamá · Ingeniería ambiental</p>
@@ -131,6 +136,10 @@
       </div>
     </article>
   </section>
+  <aside class="public-data-note" aria-label="Alcance de los datos públicos">
+    <strong>Transparencia de datos</strong>
+    <p>La consulta pública muestra solo fuentes y mediciones aprobadas. Incluye fecha, unidad, método y referencia disponibles; nombres de investigadores, notas internas y fotografías permanecen reservados. Las comparaciones son informativas y no determinan por sí solas un incumplimiento legal.</p>
+  </aside>
 
   
   <section class="workspace">
@@ -237,6 +246,7 @@
             <span>Observaciones del muestreo</span>
             <textarea id="fObservaciones" rows="3" placeholder="Ej: Medición realizada con multiparámetro HQ40d. Claridad visual media."></textarea>
           </label>
+          <label class="field field--full"><span>Fotografía de campo (opcional)</span><input id="fFotoInspeccion" type="file" accept="image/*" capture="environment"><small class="field-help">Evidencia privada de esta medición. Original hasta 15 MB; se reduce a 1600 px y 5 MB al guardar.</small><img id="fFotoInspeccionPreview" class="image-preview" alt="Vista previa de la fotografía" hidden></label>
 
           <details class="criterion-editor field--full"><summary>Intervalo específico documentado</summary><div class="grid-form"><label class="field"><span>Mínimo aceptable</span><input id="fCriterioMin" type="number" step="any"></label><label class="field"><span>Máximo aceptable</span><input id="fCriterioMax" type="number" step="any"></label><label class="field field--full"><span>Documento que respalda este intervalo</span><input id="fCriterioRef" type="url" placeholder="https://institucion/documento"></label></div><p class="field-help">Los intervalos de esta guía no se aplican automáticamente a contextos distintos.</p></details>
           <div class="field--full form-actions">
@@ -411,6 +421,7 @@
         <span>Referencia del sitio</span>
         <input id="nfUbicacion" type="text" placeholder="Ej.: Juan Díaz, junto al río; planta de tratamiento…">
       </label>
+      <label class="field"><span>Fotografía de la fuente (opcional)</span><input id="nfFoto" type="file" accept="image/*" capture="environment"><small class="field-help">Se guarda de forma privada y se puede agregar desde la cámara del dispositivo.</small><img id="nfFotoPreview" class="image-preview" alt="Vista previa de la fotografía" hidden></label>
       <div class="field-row">
         <label class="field">
           <span>Latitud</span>
@@ -443,7 +454,7 @@
     </div>
     <div class="profile-metrics" id="profileMetrics"></div>
     <section class="profile-section">
-      <div class="profile-section__heading"><div><h3>Evolución de las mediciones</h3><p id="profileTrend" class="section-note"></p></div><label class="field"><span>Parámetro</span><select id="profileParameter"></select></label></div>
+      <div class="profile-section__heading"><div><h3>Evolución de las mediciones</h3><p id="profileTrend" class="section-note"></p></div><label class="field"><span>Parámetro</span><select id="profileParameter"></select></label><label class="field"><span>Vista</span><select id="profileChartMode"><option value="line">Línea</option><option value="points">Puntos</option><option value="bars">Barras</option></select></label></div>
       <div class="profile-chart" id="profileChart" role="img" aria-label="Gráfico de mediciones de la fuente"></div>
       <p id="profileChartNote" class="section-note"></p>
     </section>
@@ -510,17 +521,17 @@
 <script src="assets/vendor/leaflet/leaflet.js"></script>
 <script src="assets/vendor/supabase-2.119.0.js"></script>
 
-<script src="js/config.js?v=20261112"></script>
-<script src="js/db.js?v=20261113.4"></script>
-<script src="js/map.js?v=20261113.4"></script>
-<script src="js/auth.js?v=20261113.2"></script>
-<script src="js/guide.js?v=20261113.4"></script>
-<script src="js/inspections.js?v=20261113.4"></script>
-<script src="js/export.js?v=20261113.4"></script>
-<script src="js/chart.js?v=20261112.4"></script>
-<script src="js/criteria.js?v=20261113.4"></script>
-<script src="js/workflows.js?v=20261113.4"></script>
-<script src="js/ui.js?v=20261113.4"></script>
-<script src="js/main.js?v=20261112"></script>
+<script src="js/config.js?v=20261125.1"></script>
+<script src="js/db.js?v=20261125.1"></script>
+<script src="js/map.js?v=20261125.1"></script>
+<script src="js/auth.js?v=20261125.1"></script>
+<script src="js/guide.js?v=20261125.1"></script>
+<script src="js/inspections.js?v=20261125.1"></script>
+<script src="js/export.js?v=20261125.1"></script>
+<script src="js/chart.js?v=20261125.1"></script>
+<script src="js/criteria.js?v=20261125.1"></script>
+<script src="js/workflows.js?v=20261125.1"></script>
+<script src="js/ui.js?v=20261125.1"></script>
+<script src="js/main.js?v=20261125.1"></script>
 </body>
 </html>
