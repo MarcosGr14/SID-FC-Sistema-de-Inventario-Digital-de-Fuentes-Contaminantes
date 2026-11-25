@@ -15,19 +15,21 @@ SID-FC es una aplicación académica para ubicar fuentes contaminantes en Panam�
 - 📚 Historial de inspecciones con búsqueda y paginación.
 - 📊 Resumen por fuente y consulta de normas y guías por medio, parámetro y uso.
 - 📄 Reportes y exportación de datos en CSV y JSON.
-- 📱 Diseño adaptable a computadoras, tabletas y teléfonos.
+- 📷 Evidencia fotográfica de la fuente o de cada medición, con captura desde la cámara y almacenamiento privado.
+- 📈 Gráficas de línea, puntos o barras para lecturas comparables.
+- 📱 Aplicación web instalable (PWA), adaptable a teléfonos y tabletas, con consulta pública reciente en caché.
 
 ## 🧭 Guía rápida
 
 ### Explorar el mapa
 
-En **Inventario** puedes ver las fuentes registradas y filtrar los marcadores por tipo o por alertas. Al seleccionar un marcador se muestran los datos de la fuente y su última medición.
+En **Inventario** puedes consultar los registros aprobados para publicación y filtrar el mapa por medio o estado de referencia. Al seleccionar un marcador se abre el expediente público disponible. Los registros sin aprobar no aparecen a visitantes.
 
 ### Registrar una fuente o un punto de evaluación
 
 1. Inicia sesión con una cuenta de inspector.
 2. Pulsa **Nueva Fuente**.
-3. Ingresa el nombre, selecciona **Agua**, **Aire** o **Suelo** y agrega una referencia del sitio.
+3. Ingresa el nombre, selecciona el medio y la categoría de la fuente, y agrega una referencia del sitio. Puedes adjuntar una fotografía; en dispositivos móviles el selector permite usar la cámara.
 4. Define la ubicación escribiendo latitud y longitud, usando la ubicación del dispositivo o pulsando **Elegir punto en el mapa** y marcando el sitio.
 5. Guarda el registro. La ubicación aparecerá en el mapa y podrá seleccionarse en futuras inspecciones.
 
@@ -39,7 +41,7 @@ Si vas a medir un punto nuevo en una visita, regístralo como punto de evaluaci�
 2. Selecciona el medio evaluado: una misma fuente admite mediciones de agua, aire o suelo.
 3. Elige el parámetro, ingresa el valor medido, la fecha y hora, y el nombre del inspector.
 4. Confirma el contexto y criterio aplicable. Si necesitas un intervalo específico, aporta el documento que lo respalda; sin criterio confirmado, la lectura queda sin clasificación.
-5. Guarda la medición para consultar el resultado en el mapa, el resumen y el histórico.
+5. Adjunta una fotografía de campo si corresponde y guarda la medición con conexión. La fotografía queda privada y asociada al registro.
 
 ### Consultar y exportar información
 
@@ -48,16 +50,14 @@ Si vas a medir un punto nuevo en una visita, regístralo como punto de evaluaci�
 - **Criterios de evaluación:** debajo del mapa, elige medio, parámetro y contexto para consultar valores, categorías, método y fuentes documentales. En móvil aparece plegado.
 - **Ampliar tabla:** disponible en Historial y Fuentes para consultar todas las columnas a ancho completo; permite volver a la vista dividida.
 - **Informes:** imprime el estado actual o el historial filtrado completo.
-- **Expediente:** revisa mediciones comparables, observaciones y fotografías, cargadas desde archivo o URL HTTPS. Las evidencias requieren sesión.
+- **Expediente:** revisa mediciones comparables, procedencia, fotografías y su historial. Las fotos subidas desde el formulario son privadas y requieren una sesión de investigador.
 - **Datos y respaldo:** descarga un respaldo JSON o un archivo CSV de las inspecciones.
 
 ## 🔐 Acceso y datos
 
-La información del inventario se almacena en Supabase y se comparte entre las personas que usan el proyecto. El mapa y las consultas son de lectura pública; para registrar fuentes o inspecciones se necesita una cuenta iniciada en Supabase Auth.
+La información se almacena en Supabase. Las personas visitantes solo pueden consultar fuentes y mediciones con `publicado_en` aprobado; la base de datos limita además las columnas visibles. Nombres de responsables, observaciones internas y fotografías privadas no se exponen en la consulta pública. Solo cuentas autenticadas pueden registrar fuentes y mediciones. La aprobación de publicación corresponde a una persona administradora con `app_metadata.role = admin` y se realiza en Supabase; una sesión de investigador común no puede publicar.
 
-Los alias que aparecen en **Acerca de nosotros** son identificadores propuestos para el equipo. Para usarlos, un administrador debe crearlos como usuarios de Supabase Auth y asignar una contraseña a cada uno.
-
-Al crear o editar cada usuario en Supabase, agrega su nombre en **User Metadata** con la propiedad `full_name`, por ejemplo: `{"full_name":"Marcos Gaitan"}`. La aplicación muestra ese nombre en la sesión y lo usa como inspector predeterminado.
+Para identificar el nombre del investigador en el registro de sesión, agrega `full_name` en los metadatos de usuario de Supabase Auth. La clasificación distingue una comparación con un criterio documentado de una determinación legal; revisa el contexto, la matriz, el período de promedio, la unidad y la fuente en [docs/CRITERIOS.md](docs/CRITERIOS.md).
 
 ## 🏗️ Arquitectura
 
@@ -69,6 +69,8 @@ SID-FC es una aplicación web de una sola página, construida con HTML, CSS y Ja
 | Lógica | `js/auth.js`, `js/inspections.js`, `js/criteria.js`, `js/export.js` | Sesión, evaluación de mediciones y exportación. |
 | Datos | `js/db.js`, `sql/schema.sql`, Supabase | Persistencia en PostgreSQL y reglas RLS. |
 | Mapa | `js/map.js`, Leaflet, OpenStreetMap | Visualización y selección de coordenadas. |
+| Aplicación instalable | `manifest.webmanifest`, `service-worker.js` | Shell offline y recursos locales; la consulta pública se conserva aparte con caducidad. |
+| Evidencias | `js/ui.js`, `js/db.js`, Supabase Storage | Optimización en cliente, carga y asociación privada a fuente o medición. |
 
 ## 🧰 Tecnologías
 
@@ -94,11 +96,11 @@ Universidad Tecnológica de Panamá · Facultad de Ingeniería de Sistemas Compu
 
 SID-FC es un prototipo académico de seguimiento ambiental. Las alertas comparan las mediciones con los límites configurados en el sistema y no constituyen una determinación oficial de incumplimiento ambiental.
 
-## 🛠️ Estado del servicio y verificación
+## 📲 Instalación, caché y conexión
 
-Si aparece **Servicio de datos no disponible**, la navegación sigue operativa. Usa **Reintentar conexión** cuando vuelva el servicio. Registrar y exportar datos requiere la conexión con Supabase.
+La PWA puede instalarse desde el navegador compatible. Con conexión, almacena los recursos locales y las últimas filas públicas aprobadas por un máximo de siete días; sin conexión permite consultar esa copia e informa su fecha. Las consultas de cuentas autenticadas, tokens, fotos y solicitudes de escritura nunca se guardan en la caché pública. Registrar mediciones y subir fotografías requiere conexión.
 
-Las dependencias Leaflet 1.9.4 y Supabase JS 2.119.0 están incluidas en `assets/vendor`, con sus licencias. El frontend no requiere compilación. Para ejecutar las pruebas de regresión de desarrollo: `npm ci` y `npm test`.
+Las dependencias Leaflet 1.9.4 y Supabase JS 2.119.0 están incluidas en `assets/vendor`, con sus licencias. El frontend no requiere compilación. Sirve la carpeta desde localhost o HTTPS para activar el service worker y la cámara. Para ejecutar las pruebas de regresión: `npm ci` y `npm test`.
 
 El esquema base está en `sql/schema.sql`; la ampliación de expedientes, tendencias y evidencias está en `sql/actualizacion_expedientes_y_tendencias.sql`. La ampliación `sql/criterios_y_archivo.sql` añade intervalos por medición y archivo recuperable, sin retirar registros. El archivo `sql/datos_prueba.sql` contiene solo datos identificados como simulación, para uso académico.
 
@@ -110,6 +112,6 @@ El CSV utiliza estas columnas: `fuente,medio,parametro,valor,unidad,fecha,respon
 
 El botón **Volver a medición de campo** permite salir del modo informe sin perder lo escrito. También puedes cambiar el origen a análisis de laboratorio.
 
-La guía de muestreo distingue normas panameñas por ámbito, referencias internacionales y objetivos específicos del sitio. Un intervalo propio requiere el documento que lo respalda. Los datos académicos conservan su procedencia en la ficha técnica. La [revisión documental de criterios](docs/CRITERIOS.md) detalla valores, condiciones y fuentes; la migración de criterios en `supabase/migrations` conserva una copia del perfil aplicado a cada nueva medición.
+La guía distingue normas panameñas por ámbito, referencias internacionales y objetivos del sitio. La aplicación no clasifica si falta contexto, unidad o perfil aplicable. La [revisión documental de criterios](docs/CRITERIOS.md) detalla valores, condiciones y fuentes; cada medición conserva una instantánea del criterio aplicado. Para efluentes, verifica la actividad CIIU/Anexo A antes de usar el perfil. Los datos académicos conservan su procedencia y no se presentan como mediciones oficiales.
 
 `sql/organizar_inventario.sql` corresponde a la limpieza puntual del 12 de noviembre, no a una migración recurrente. Las fuentes retiradas del inventario se archivan de forma recuperable. `sql/restaurar_fuentes_archivadas.sql` permite restaurarlas desde una sesión administrativa.

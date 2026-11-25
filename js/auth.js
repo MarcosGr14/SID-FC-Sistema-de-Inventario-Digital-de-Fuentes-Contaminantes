@@ -47,14 +47,12 @@ const Auth = (() => {
       return currentUser;
     }
 
-    if (email === SID_CONFIG.DEMO_USER.email && password === SID_CONFIG.DEMO_USER.password) {
-      currentUser = { email, demo: true };
+    if (email.trim() && password) {
+      currentUser = { email: email.trim(), demo: true };
       sessionStorage.setItem(SESSION_KEY, JSON.stringify(currentUser));
       return currentUser;
     }
-    throw new Error(
-      `Modo demo activo. Usa: ${SID_CONFIG.DEMO_USER.email} / ${SID_CONFIG.DEMO_USER.password}`
-    );
+    throw new Error("Escribe un correo y una contraseña para continuar en modo demostración.");
   }
 
   async function logout() {

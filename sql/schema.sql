@@ -5,11 +5,15 @@ create table if not exists fuentes (
   tipo        text not null check (tipo in ('agua','aire')),
   lat         double precision not null,
   lng         double precision not null,
+  categoria_fuente text not null default 'otro',
+  publicado_en timestamptz,
   creado_por  uuid references auth.users(id),
   creado_en   timestamptz not null default now()
 );
 alter table public.fuentes
-  add column if not exists ubicacion text;
+  add column if not exists ubicacion text,
+  add column if not exists categoria_fuente text not null default 'otro',
+  add column if not exists publicado_en timestamptz;
 create table if not exists limites (
   id         uuid primary key default gen_random_uuid(),
   matriz     text not null check (matriz in ('agua','aire')),
@@ -42,6 +46,7 @@ create table if not exists inspecciones (
   cumple         boolean not null,
   fecha          timestamptz not null,
   observaciones  text,
+  publicado_en   timestamptz,
   creado_por     uuid references auth.users(id),
   creado_en      timestamptz not null default now()
 );
@@ -52,22 +57,40 @@ alter table fuentes enable row level security;
 alter table inspecciones enable row level security;
 alter table limites enable row level security;
 
+alter table public.inspecciones
+  add column if not exists publicado_en timestamptz;
 drop policy if exists "Lectura pública de fuentes" on fuentes;
-create policy "Lectura pública de fuentes" on fuentes
-  for select to anon, authenticated using (true);
+drop policy if exists "Consulta pública de fuentes aprobadas" on fuentes;
+create policy "Consulta pública de fuentes aprobadas" on fuentes
+  for select to anon using (publicado_en is not null);
+drop policy if exists "Investigadores consultan fuentes" on fuentes;
+create policy "Investigadores consultan fuentes" on fuentes
+  for select to authenticated using (true);
 drop policy if exists "Inserción solo autenticado" on fuentes;
 create policy "Inserción solo autenticado" on fuentes
-  for insert to authenticated with check (true);
+  for insert to authenticated with check (publicado_en is null);
 
 drop policy if exists "Lectura pública de inspecciones" on inspecciones;
-create policy "Lectura pública de inspecciones" on inspecciones
-  for select to anon, authenticated using (true);
+drop policy if exists "Consulta pública de mediciones aprobadas" on inspecciones;
+create policy "Consulta pública de mediciones aprobadas" on inspecciones
+  for select to anon using (
+    publicado_en is not null
+    and exists (select 1 from public.fuentes f where f.id = fuente_id and f.publicado_en is not null)
+  );
+drop policy if exists "Investigadores consultan inspecciones" on inspecciones;
+create policy "Investigadores consultan inspecciones" on inspecciones
+  for select to authenticated using (true);
 drop policy if exists "Inserción solo autenticado" on inspecciones;
 create policy "Inserción solo autenticado" on inspecciones
-  for insert to authenticated with check (true);
+  for insert to authenticated with check (publicado_en is null);
 
 drop policy if exists "Lectura pública de límites" on limites;
 create policy "Lectura pública de límites" on limites
   for select to anon, authenticated using (true);
-grant select on table fuentes, inspecciones, limites to anon, authenticated;
-grant insert on table fuentes, inspecciones to authenticated;
+revoke all on table public.fuentes, public.inspecciones, public.limites
+  from public, anon, authenticated;
+grant select on table public.fuentes, public.inspecciones, public.limites to authenticated;
+grant select on table public.limites to anon;
+grant insert on table public.fuentes, public.inspecciones to authenticated;
+grant usage on schema public to anon, authenticated;
+grant select on table public.fuentes, public.inspecciones to authenticated;

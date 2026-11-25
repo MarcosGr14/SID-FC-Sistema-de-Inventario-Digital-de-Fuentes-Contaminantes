@@ -22,7 +22,7 @@ function app(offline = false, extra = [], options = {}) {
     w.__sdkFetch=settings.global.fetch;
     clients++;
     return { auth: { getSession: async () => ({ data: { session: options.user ? { user:options.user } : null } }), onAuthStateChange(callback) { w.__emitAuth=(event,user)=>callback(event,user?{user}:null);return {data:{subscription:{unsubscribe(){}}}}; }, signOut: async () => ({ error: null }) },
-      from(table) { let first=0,last=Infinity;const filters=[];const q = { select() { return q; }, range(from,to) { first=from;last=to;return q; }, eq(column,value) { filters.push(r=>r[column]===value);return q; }, in(column,values) { filters.push(r=>values.includes(r[column]));return q; }, insert(records) { w.__insertPayload=records; w.__insertCalls=(w.__insertCalls||0)+1;return q; }, order() { return q; }, then(resolve, reject) { return Promise.resolve().then(async () => { await pause(); return failed ? { data: null, error: new Error('Failed to fetch') } : { data: (({ fuentes, limites, inspecciones, evidencias_fuente:options.evidence||[] })[table] || []).filter(r=>filters.every(f=>f(r))).slice(first,last+1), error: null }; }).then(resolve, reject); } }; return q; }
+      from(table) { let first=0,last=Infinity;const filters=[];const q = { select(columns) { (w.__selects ||= []).push({table,columns});return q; }, range(from,to) { first=from;last=to;return q; }, eq(column,value) { filters.push(r=>r[column]===value);return q; }, in(column,values) { filters.push(r=>values.includes(r[column]));return q; }, insert(records) { w.__insertPayload=records; w.__insertCalls=(w.__insertCalls||0)+1;return q; }, order() { return q; }, then(resolve, reject) { return Promise.resolve().then(async () => { await pause(); return failed ? { data: null, error: new Error('Failed to fetch') } : { data: (({ fuentes, limites, inspecciones, evidencias_fuente:options.evidence||[] })[table] || []).filter(r=>filters.every(f=>f(r))).slice(first,last+1), error: null }; }).then(resolve, reject); } }; return q; }
     };
   } };
   evaluate('const SIDMap = { init(){}, isInitialized:()=>true, invalidateSize(){}, render(sources){window.__mapSources=sources;}, focusFuente(id){window.__focused=id;} };');
@@ -46,6 +46,23 @@ test('navigation remains available before and after database failure; retry rest
   assert.equal(d.getElementById('statTotal').textContent, '12');
   assert.equal(a.clients(), 1);
   a.dom.window.close();
+});
+test('public queries select only approved public fields while authenticated queries retain investigator fields', async () => {
+  const publicApp=app();await publicApp.init;
+  const publicSelects=publicApp.w.__selects;
+  const publicSources=publicSelects.find(x=>x.table==='fuentes').columns.split(',');
+  const publicReadings=publicSelects.find(x=>x.table==='inspecciones').columns.split(',');
+  assert.ok(publicSources.includes('categoria_fuente'));
+  assert.ok(!publicSources.includes('creado_por'));
+  assert.ok(!publicReadings.includes('inspector'));
+  assert.ok(!publicReadings.includes('observaciones'));
+  assert.ok(!publicReadings.includes('cumple'));
+  publicApp.dom.window.close();
+
+  const investigatorApp=app(false,[],{user:{id:'researcher-1',email:'researcher@example.org'}});await investigatorApp.init;
+  assert.equal(investigatorApp.w.__selects.find(x=>x.table==='fuentes').columns,'*');
+  assert.equal(investigatorApp.w.__selects.find(x=>x.table==='inspecciones').columns,'*');
+  investigatorApp.dom.window.close();
 });
 test('history, pagination, source map action, and profile preserve every measurement', async () => {
   const a = app(), d = a.w.document; await a.init;
